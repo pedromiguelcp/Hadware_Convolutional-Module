@@ -3,7 +3,7 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 10/15/2020 05:14:49 PM
+// Create Date: 10/15/2020 09:02:27 PM
 // Design Name: 
 // Module Name: PE
 // Project Name: 
@@ -21,22 +21,22 @@
 
 
 module PE #
-    (
-        parameter integer   
-            kernel_size = 2,
-            data_width  = 4,
-            data_height = 4,
-            point_width = 8
-    )
-    (
-        input  wire  clock,
-        input  wire  reset,
-        input  wire  enable_read,
-        input  wire  [0:point_width*data_width*data_height-1] data,
-        input  wire  [0:point_width*kernel_size*kernel_size-1] weights,
-        
-        output wire  [0:point_width-1] data_out,
-        output wire  conv_done
-    );
+(
+    parameter integer   
+        kernel_size = 2,
+        data_width  = 4,
+        data_height = 4,
+        point_width = 8
+)
+(
+    input  wire  clock,
+    input  wire  reset,
+    input  wire  enable_read,
+    input  wire  [0:point_width*kernel_size*kernel_size-1] window,//window from linebuffer
+    input  wire  [0:point_width*kernel_size*kernel_size-1] weights,
+    
+    output wire  [0:point_width-1] conv_result,
+    output wire  conv_done
+);
     
 endmodule
