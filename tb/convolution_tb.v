@@ -54,7 +54,7 @@ module convolution_tb#(
         valid    = 1'b0;
         selecK_I = 1'b0;//kernel
 
-        #10 reset	 = 1'b0;
+        #100 reset	 = 1'b0;
 
         /*Load kernel*/
         data0    = 8'b00000001; 
@@ -122,7 +122,7 @@ module convolution_tb#(
         #10 valid = 1'b1;
 
         #10 valid = 1'b0;
-        #20 $finish;
+        #10 $finish;
     end
 
     convolution

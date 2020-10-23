@@ -81,6 +81,8 @@ module bram_tb#(
 
         #10 r_addrs = {6'd8, 6'd7, 6'd6};
         #10 matrix[RAM_WIDTH*9-1:RAM_WIDTH*6] = {data_out[RAM_WIDTH*3-1:RAM_WIDTH*2], data_out[RAM_WIDTH*2-1:RAM_WIDTH], data_out[RAM_WIDTH-1:0]};
+
+        #10 $finish;
     end
 
 

@@ -41,15 +41,12 @@ module convolution #(
     reg signed [M_ARRAY-1:0]   r_kernel [0:M_LEN-1];
     reg signed [M_ARRAY-1:0]   r_image [0:M_LEN-1];
     
-    reg signed [CONV_LEN-1:0]   r_partial;
-
-    wire signed [CONV_LEN-1:0]   w_resultado;
+    reg signed [CONV_LEN-1:0]   w_resultado;
     
     reg signed [(2*BIT_LEN)-1:0] r_array_mult [0:(M_LEN*M_LEN)-1];
 
     integer i, j, shift;
 
-    assign w_resultado = r_partial;
     assign o_data = w_resultado;
 
     always @( posedge i_clk) begin
@@ -63,17 +60,17 @@ module convolution #(
         else if(i_valid)begin
             /*Load kernel or image*/
             case (i_selecK_I)
-                1'b1: begin
-                    for( shift = 0; shift < M_LEN-1; shift = shift +1)//shift of lines
-                        r_image[shift]<=r_image[shift+1];
-                    
-                    r_image[M_LEN-1]<={i_data2,i_data1,i_data0};//store new values
-                end
                 1'b0: begin
                     for( shift = 0; shift < M_LEN-1; shift = shift +1)
                         r_kernel[shift]<=r_kernel[shift+1];
 
                     r_kernel[M_LEN-1]<={i_data2,i_data1,i_data0};
+                end
+                1'b1: begin
+                    for( shift = 0; shift < M_LEN-1; shift = shift +1)//shift of lines
+                        r_image[shift]<=r_image[shift+1];
+                    
+                    r_image[M_LEN-1]<={i_data2,i_data1,i_data0};//store new values
                 end
             endcase
         end
@@ -89,9 +86,9 @@ module convolution #(
 
     /*sum of the matrix multiplication results*/
     always @(*) begin
-        r_partial=0;
+        w_resultado=0;
         for(j = 0 ; j < (M_LEN*M_LEN); j = j +1)begin
-            r_partial = r_partial + r_array_mult[j];
+            w_resultado = w_resultado + r_array_mult[j];
         end
     end
 
