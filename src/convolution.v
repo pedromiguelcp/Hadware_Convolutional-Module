@@ -31,11 +31,10 @@ module convolution #(
     )(
     input  i_clk,
     input  i_reset,
-    input  i_valid,
-    input  i_selecK_I, //0 kernel   1 image
-    input  [BIT_LEN-1:0] i_data0,
-    input  [BIT_LEN-1:0] i_data1,
-    input  [BIT_LEN-1:0] i_data2,
+    input  i_selec_K, 
+    input  i_selec_I, 
+    input  [BIT_LEN*M_LEN-1:0] i_data_img,
+    input  [BIT_LEN*M_LEN-1:0] i_data_kernel,
     output [CONV_LEN-1:0] o_data
     );
     reg signed [M_ARRAY-1:0]   r_kernel [0:M_LEN-1];
@@ -57,22 +56,19 @@ module convolution #(
                 r_kernel[shift]<={M_ARRAY{1'b0}};
             end 
         end
-        else if(i_valid)begin
-            /*Load kernel or image*/
-            case (i_selecK_I)
-                1'b0: begin
-                    for( shift = 0; shift < M_LEN-1; shift = shift +1)
-                        r_kernel[shift]<=r_kernel[shift+1];
+        else begin
+            if(i_selec_K) begin
+                for( shift = 0; shift < M_LEN-1; shift = shift +1)
+                    r_kernel[shift]<=r_kernel[shift+1];
 
-                    r_kernel[M_LEN-1]<={i_data2,i_data1,i_data0};
-                end
-                1'b1: begin
-                    for( shift = 0; shift < M_LEN-1; shift = shift +1)//shift of lines
-                        r_image[shift]<=r_image[shift+1];
-                    
-                    r_image[M_LEN-1]<={i_data2,i_data1,i_data0};//store new values
-                end
-            endcase
+                r_kernel[M_LEN-1]<=i_data_kernel;
+            end
+            if(i_selec_I) begin
+                for( shift = 0; shift < M_LEN-1; shift = shift +1)//shift of lines
+                    r_image[shift]<=r_image[shift+1];
+                
+                r_image[M_LEN-1]<=i_data_img;//store new values
+            end
         end
     end
 

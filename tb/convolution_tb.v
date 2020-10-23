@@ -33,11 +33,10 @@ module convolution_tb#(
     
     reg clk;
     reg reset;
-    reg valid;
-    reg selecK_I;
-    reg signed [BIT_LEN-1:0]data0;
-    reg signed [BIT_LEN-1:0]data1;
-    reg signed [BIT_LEN-1:0]data2;
+    reg selec_K;
+    reg selec_I;
+    reg signed [BIT_LEN*M_LEN-1:0]data_img;
+    reg signed [BIT_LEN*M_LEN-1:0]data_kernel;
     wire [CONV_LEN-1:0] out_data;
 
 
@@ -47,81 +46,38 @@ module convolution_tb#(
 
     initial begin
         clk      = 1'b0;
-        data0    = 8'b00000000; 
-        data1    = 8'b00000000; 
-        data2    = 8'b00000000; 
+        data_img    = 24'b0; 
+        data_kernel = 24'b0; 
         reset    = 1'b1; 
-        valid    = 1'b0;
-        selecK_I = 1'b0;//kernel
+        selec_K  = 1'b0;
+        selec_I  = 1'b0;
 
         #100 reset	 = 1'b0;
 
         /*Load kernel*/
-        data0    = 8'b00000001; 
-        data1    = 8'b00000001; 
-        data2    = 8'b00000001;
-        #10 valid = 1'b1; 
+        data_kernel    = {8'b00000001, 8'b00000001, 8'b00000001};
+        data_img    = {8'b00000001, 8'b00000001, 8'b00000001};
+        #10 selec_K = 1'b1;
+        selec_I = 1'b1; 
 
-        #10 valid = 1'b0;
+        #10 data_kernel    = {8'b00000010, 8'b00000010, 8'b00000010};
+        data_img    = {8'b00000010, 8'b00000010, 8'b00000010};
 
-        data0    = 8'b00000010; 
-        data1    = 8'b00000010; 
-        data2    = 8'b00000010;
-        #10 valid = 1'b1;
+        #10 data_kernel    = {8'b00000011, 8'b00000011, 8'b00000011};
+        data_img      = {8'b00000011, 8'b00000011, 8'b00000011};
 
-        #10 valid = 1'b0;
+        
+        #10 selec_K = 1'b0;//stop consuming input data
+        selec_I = 1'b0;
 
-        data0    = 8'b00000011; 
-        data1    = 8'b00000011; 
-        data2    = 8'b00000011;
-        #10 valid = 1'b1;
-
-        /*Load Image*/
-        #10 valid = 1'b0;
-        selecK_I = 1'b1;//image
-
-        data0    = 8'b00000001; 
-        data1    = 8'b00000001; 
-        data2    = 8'b00000001;
-        #10 valid = 1'b1; 
-
-        #10 valid = 1'b0;
-
-        data0    = 8'b00000010; 
-        data1    = 8'b00000010; 
-        data2    = 8'b00000010;
-        #10 valid = 1'b1;
-
-        #10 valid = 1'b0;
-
-        data0    = 8'b00000011; 
-        data1    = 8'b00000011; 
-        data2    = 8'b00000011;
-        #10 valid = 1'b1;
-
-        #10 valid = 1'b0;
 
         /*First image slide*/
-        data0    = 8'b00000100; 
-        data1    = 8'b00000100; 
-        data2    = 8'b00000100;
-        #10 valid = 1'b1;
+        data_img      = {8'b00000100, 8'b00000100, 8'b00000100};
+        #10 selec_I = 1'b1;
 
-        #10 valid = 1'b0;
+        #10 data_img      = {8'b00000101, 8'b00000101, 8'b00000101};
 
-        data0    = 8'b00000101; 
-        data1    = 8'b00000101; 
-        data2    = 8'b00000101;
-        #10 valid = 1'b1;
-
-        #10 valid = 1'b0;
-
-        data0    = 8'b00000110; 
-        data1    = 8'b00000110; 
-        data2    = 8'b00000110;
-        #10 valid = 1'b1;
-
-        #10 valid = 1'b0;
+        #10 selec_I = 1'b0;
         #10 $finish;
     end
 
@@ -129,11 +85,10 @@ module convolution_tb#(
     conv(
         .i_clk(clk), 
         .i_reset(reset), 
-        .i_valid(valid), 
-        .i_selecK_I(selecK_I), 
-        .i_data0(data0), 
-        .i_data1(data1),
-        .i_data2(data2),
+        .i_selec_K(selec_K), 
+        .i_selec_I(selec_I), 
+        .i_data_img(data_img), 
+        .i_data_kernel(data_kernel),
         .o_data(out_data)
     );
 
