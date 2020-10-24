@@ -20,17 +20,13 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module controller #(
-    parameter IN_MATRIX_WITDH = 5
-)
+module controller
 (
     input wire i_clk, i_rst,
     input wire i_start,
-    input wire i_ready2compute,
-    input wire i_conv_done,
-    output wire o_compute_conv,
-    output reg [2:0] o_addr0, o_addr1, o_addr2,
-    output wire o_bram0_wr, o_bram1_wr, o_bram2_wr
+    output reg [17:0] o_addr0, o_addr1,// o_addr2,
+    //output wire o_bram2_wr,
+    output wire o_selec_K, o_selec_I
 );
 
 localparam [2:0]    s_idle          = 3'b000,
@@ -40,14 +36,19 @@ localparam [2:0]    s_idle          = 3'b000,
                     s_inc_addr      = 3'b100;
 
 reg [2:0] r_next_state;
-reg [2:0] r_img_addr,  r_out_addr;
-
+reg [17:0] r_img_addr,  r_kernel_addr;
+reg [5:0] r_addrImg0, r_addrImg1, r_addrImg2;
+reg [5:0] r_addrK0, r_addrK1, r_addrK2;
 
 always @(posedge i_clk) begin
         if(i_rst) begin
             r_next_state <= s_idle;
-            r_img_addr <= 0;
-            r_out_addr <= 0;
+            r_addrImg0 <= 0;
+            r_addrImg1 <= 1;
+            r_addrImg2 <= 2;
+            r_addrK0 <= 0;
+            r_addrK1 <= 1;
+            r_addrK2 <= 2;
         end
         else begin
         case(r_next_state)
@@ -61,28 +62,25 @@ always @(posedge i_clk) begin
             end
         
             s_loadFM_K: begin
-
-                    if(i_ready2compute == 1'b1) begin
-                        r_next_state <= s_compute_conv;
-                    end
-                    else begin
-                        r_next_state <= s_loadFM_K;
-                    end 
+                    r_next_state <= s_compute_conv;
+                    
+                    
              end
         
              s_compute_conv: begin
-    
-                    if(i_conv_done == 1'b1) begin
-                        r_next_state <= s_store_out;
-                    end
-                    else begin
-                        r_next_state <= s_compute_conv;
-                    end
+                    r_next_state <= s_store_out;
               end
         
              s_store_out: begin
-                    r_next_state <= s_inc_addr;
-                    if(r_img_addr < IN_MATRIX_WITDH) begin
+                    if(r_addrImg0 < 15) begin
+
+                        r_addrImg0 <= r_addrImg0 + 3;
+                        r_addrImg1 <= r_addrImg1 + 3;
+                        r_addrImg2 <= r_addrImg2 + 3;
+                        r_addrK0 <= r_addrK0 + 3;
+                        r_addrK1 <= r_addrK1 + 3;
+                        r_addrK2 <= r_addrK2 + 3;
+
                         r_next_state <= s_inc_addr;
                     end
                     else begin
@@ -91,8 +89,6 @@ always @(posedge i_clk) begin
               end
         
               s_inc_addr: begin
-                    r_img_addr <= r_img_addr + 1;
-                    r_out_addr <= r_out_addr + 1;
                     r_next_state <= s_loadFM_K;
               end
                     
@@ -108,50 +104,53 @@ always @(posedge i_clk) begin
 end
 
 always @(*) begin
+        r_img_addr = {r_addrImg2, r_addrImg1, r_addrImg1};
+        r_kernel_addr = {r_addrK2, r_addrK1, r_addrK0};
         case(r_next_state)
             s_idle: begin
                 o_addr0 = 0;
                 o_addr1 = 0;
-                o_addr2 = 0;
+//                o_addr2 = 0;
             end
 
             s_loadFM_K: begin
                 o_addr0 = r_img_addr;
-                o_addr1 = r_img_addr;
-                o_addr2 = r_out_addr;
+                o_addr1 = r_kernel_addr;
+//                o_addr2 = r_out_addr;
             end
 
             s_compute_conv: begin
                 o_addr0 = r_img_addr;
-                o_addr1 = r_img_addr;
-                o_addr2 = r_out_addr;
+                o_addr1 = r_kernel_addr;
+//                o_addr2 = r_out_addr;
             end
 
             s_store_out: begin
                 o_addr0 = r_img_addr;
-                o_addr1 = r_img_addr;
-                o_addr2 = r_out_addr;
+                o_addr1 = r_kernel_addr;
+//                o_addr2 = r_out_addr;
             end
 
             s_inc_addr: begin
                 o_addr0 = r_img_addr;
-                o_addr1 = r_img_addr;
-                o_addr2 = r_out_addr;
+                o_addr1 = r_kernel_addr;
+//                o_addr2 = r_out_addr;
             end
             
             default: begin
                 o_addr0 = 0;
                 o_addr1 = 0;
-                o_addr2 = 0;
+//                o_addr2 = 0;
 
             end
             
         endcase
  end               
 
+assign o_selec_K = (r_next_state == s_loadFM_K && r_addrK0 <= 6) ? 1:0;
+assign o_selec_I = (r_next_state == s_loadFM_K) ? 1:0;
 assign o_compute_conv = (r_next_state == s_compute_conv) ? 1:0;
-assign o_bram0_wr = 0;
-assign o_bram1_wr = 0;
-assign o_bram2_wr = (r_next_state == s_store_out) ? 1:0;
+
+//assign o_bram2_wr = (r_next_state == s_store_out) ? 1:0;
 
 endmodule
