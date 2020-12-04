@@ -20,26 +20,34 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module PE_tb();
+module PE_tb #(
+    parameter KERNEL_SIZE = 3,
+    parameter FM_SIZE = 3
+    )();
 
     reg i_clk;
     reg [8:0] OPMODE;
     reg [4:0] INMODE;
     
     reg signed [29:0] i_DataFM;
-    reg signed [26:0] i_D;
-    reg signed [71:0] i_Weight;
+    reg i_en;
+    reg signed [KERNEL_SIZE*KERNEL_SIZE*18-1:0] i_Weight;
+
+    wire o_en;
     wire signed [47:0] o_P;
     
     PE #(
-      .KERNEL_SIZE(4)
+      .KERNEL_SIZE(KERNEL_SIZE),
+      .FM_SIZE(FM_SIZE)
       )uut(
       .i_clk(i_clk), 
       .INMODE(INMODE),
       .OPMODE(OPMODE), 
       .i_DataFM(i_DataFM), 
       .i_Weight(i_Weight),
-      .i_D(i_D),
+      .i_en(i_en),
+
+      .o_en(o_en),
       .o_P(o_P)
     );
       
@@ -47,61 +55,64 @@ module PE_tb();
     
     initial begin
       i_clk = 0;
-      OPMODE = 9'b000110101;//somar o C M(resultado da multiplica��o)
+      i_en = 0;
+      OPMODE = 9'b110101;//somar o C M(resultado da multiplicao)
+      INMODE = 5'b100;
 
-      INMODE = 5'b00100;
-      i_D = 27'b000000000000000000000000000;
+      i_DataFM = 30'b0;
+      //i_Weight = {18'b1}; //1*1
+      //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1}; //2*2
+      i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //3*3
+      //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //4*4
 
-      i_DataFM = 30'b000000000000000000000000000000;
-      i_Weight = 72'b000000000000000010_000000000000000001_000000000000000010_000000000000000001; 
-
-      #150    
-      i_DataFM = 30'b000000000000000000000000000001;
+      #150
+      i_en = 1;//iniciar envio de valores    
+      i_DataFM = 30'b1;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000000010;
+      i_DataFM = 30'b10;
     
       #10    
-      i_DataFM = 30'b000000000000000000000000000011;
+      i_DataFM = 30'b11;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000000100;
+      i_DataFM = 30'b100;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000000101;
+      i_DataFM = 30'b101;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000000110;
+      i_DataFM = 30'b110;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000000111;
+      i_DataFM = 30'b111;
 
       #10   
-      i_DataFM = 30'b000000000000000000000000001000;
+      i_DataFM = 30'b1000;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000001001;
+      i_DataFM = 30'b1001;
       
       #10    
-      i_DataFM = 30'b000000000000000000000000001010;
+      i_DataFM = 30'b1010;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000001011;
+      i_DataFM = 30'b1011;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000001100;
+      i_DataFM = 30'b1100;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000001101;
+      i_DataFM = 30'b1101;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000001110;
+      i_DataFM = 30'b1110;
 
       #10   
-      i_DataFM = 30'b000000000000000000000000001111;
+      i_DataFM = 30'b1111;
 
       #10    
-      i_DataFM = 30'b000000000000000000000000010000;
+      i_DataFM = 30'b10000;
 
       $finish;
     end

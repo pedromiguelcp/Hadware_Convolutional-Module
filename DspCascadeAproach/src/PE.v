@@ -21,27 +21,74 @@
 
 
 module PE #(
-    parameter KERNEL_SIZE = 2
+    parameter KERNEL_SIZE = 1,
+    parameter FM_SIZE = 1
     )(
     input wire i_clk,
     input wire [8:0]INMODE, 
     input wire [4:0] OPMODE, 
     input wire signed [29:0] i_DataFM, 
     input wire signed [(KERNEL_SIZE*KERNEL_SIZE*18)-1:0] i_Weight,
+    input wire i_en, 
 
-    input wire signed [26:0] i_D, 
+    output reg o_en, //sinal para dizer quando tem saída válida
     output reg signed [47:0] o_P
     );
     
+    /*tamanho da saída
+        W2 = (W1 - F + 2P) / S + 1
+        H2 = (H1 - F + 2P) / S + 1
+    */
+    reg [5:0] out_cnt;
     
+    //saída de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
-    
+
+    /*wire [47:0] w_DSP0;
+    wire [47:0] w_DSP1;
+    wire [47:0] w_DSP2;
+    wire [47:0] w_DSP3;
+    assign w_DSP0 = w_outDSP[47:0];
+    assign w_DSP1 = w_outDSP[95:48];        
+    assign w_DSP2 = w_outDSP[143:96];   
+    assign w_DSP3 = w_outDSP[191:144];*/
+
+    //saída das shift rams -> quantidade = tamanho kernel
     wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
      
     //last position of array
     always @(*) begin
-        o_P = w_outRAM[(KERNEL_SIZE*48) - 1:(KERNEL_SIZE*48) - 1 - 47];
+        o_P = (KERNEL_SIZE != FM_SIZE) ?  
+                        w_outRAM[(KERNEL_SIZE*48) - 1:(KERNEL_SIZE*48) - 48] :
+                        w_outDSP[(KERNEL_SIZE*KERNEL_SIZE*48) - 1:(KERNEL_SIZE*KERNEL_SIZE*48) - 48];
     end
+
+    /*
+        A partir do momento em que i_en=1 começa o controlo
+        para saber quando o o_en=1
+
+        FM(4) K(4) delay(2)
+        FM(4) K(3) delay(3)
+        FM(4) K(2) delay(4)
+        FM(3) K(3) delay(2)
+        FM(3) K(2) delay(3)
+        FM(3) K(1) delay(4)
+        FM(2) K(2) delay(2)
+        FM(2) K(1) delay(3)
+    */
+    always @(posedge i_clk) begin
+        if(i_en) begin
+            out_cnt <= out_cnt + 1;
+
+            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) - (FM_SIZE-KERNEL_SIZE) + 2 - (FM_SIZE - KERNEL_SIZE)))
+                o_en <= 1; 
+        end
+        else begin
+            o_en <= 0;
+            out_cnt <= 0;
+        end  
+    end
+
     /*
     2*2 ->  [95:48]  [191:144]
             [47:0]   [95:48]
@@ -53,15 +100,17 @@ module PE #(
     /*Número de shift rams é igual ao tamanho do kernel*/
     generate 
     genvar j;
-    for(j=0;j<KERNEL_SIZE*KERNEL_SIZE;j=j+KERNEL_SIZE) begin
-        shift_bram #(
-            .RAM_WIDTH(48),
-            .RAM_DEPTH(1)
-        )ram(
-            .i_clk(i_clk),
-            .i_data(w_outDSP[(48*j)+((KERNEL_SIZE*48)-1):48*j+(KERNEL_SIZE-1)*48]),
-            .o_data(w_outRAM[(48*(j/KERNEL_SIZE))+47:48*(j/KERNEL_SIZE)])
-        );
+    if(KERNEL_SIZE != FM_SIZE) begin
+        for(j=0;j<KERNEL_SIZE*KERNEL_SIZE;j=j+KERNEL_SIZE) begin
+            shift_bram #(
+                .RAM_WIDTH(48),
+                .RAM_DEPTH(FM_SIZE-KERNEL_SIZE)
+            )ram(
+                .i_clk(i_clk),
+                .i_data(w_outDSP[(48*j)+((KERNEL_SIZE*48)-1):48*j+(KERNEL_SIZE-1)*48]),
+                .o_data(w_outRAM[(48*(j/KERNEL_SIZE))+47:48*(j/KERNEL_SIZE)])
+            );
+        end
     end
     endgenerate  
 
@@ -141,8 +190,15 @@ module PE #(
                 .OPMODE(9'b000110101), 
                 //.RSTINMODE(RSTINMODE), 
                 .A(i_DataFM), 
-                .B(i_Weight[(18*i)+17:18*i]), 
-                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]:  (i!=0) ? w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48] :   0),
+                .B(i_Weight[(18*i)+17:18*i]),
+                /*
+                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]: (i!=0) ? w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48] :   0),
+                */ 
+                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]:  
+                                                                (i==0) ? 0 :
+                                                                (KERNEL_SIZE==FM_SIZE) ? w_outDSP[(48*i)-1:(48*i)-48] :
+                                                                 w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48]),
+
                 .CARRYIN(1'd0), 
                 //.D(D),
                 .CEA1(1), 
