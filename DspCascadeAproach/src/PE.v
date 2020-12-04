@@ -67,9 +67,10 @@ module PE #(
         A partir do momento em que i_en=1 começa o controlo
         para saber quando o o_en=1
 
-        FM(4) K(4) delay(2)
+        FM(4) K(4) delay(2)  
         FM(4) K(3) delay(3)
         FM(4) K(2) delay(4)
+        FM(4) K(1) delay(4)
         FM(3) K(3) delay(2)
         FM(3) K(2) delay(3)
         FM(3) K(1) delay(4)
@@ -80,7 +81,7 @@ module PE #(
         if(i_en) begin
             out_cnt <= out_cnt + 1;
 
-            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) - (FM_SIZE-KERNEL_SIZE) + 2 - (FM_SIZE - KERNEL_SIZE)))
+            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) + 2 ))
                 o_en <= 1; 
         end
         else begin
