@@ -21,8 +21,10 @@
 
 
 module PE #(
-    parameter KERNEL_SIZE = 2,
-    parameter FM_SIZE = 4
+  parameter KERNEL_SIZE = 3,
+  parameter FM_SIZE = 4,
+  parameter PADDING = 0,
+  parameter STRIDE = 1
     )(
     input wire i_clk,
     input wire [8:0]INMODE, 
@@ -31,18 +33,18 @@ module PE #(
     input wire signed [(KERNEL_SIZE*KERNEL_SIZE*18)-1:0] i_Weight,
     input wire i_en, 
 
-    output reg o_en, //sinal para dizer quando tem saída válida
+    output reg o_en, //sinal para dizer quando tem saÃ­da vÃ¡lida
     output reg signed [47:0] o_P
     );
     
-    /*tamanho da saída
+    /*tamanho da saÃ­da
         W2 = (W1 - F + 2P) / S + 1
         H2 = (H1 - F + 2P) / S + 1
     */
     reg [5:0] r_out_cnt;  
     reg r_cnt;
     
-    //saída de cada DSP
+    //saÃ­da de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
 
     /*wire [47:0] w_DSP0;
@@ -54,30 +56,18 @@ module PE #(
     assign w_DSP2 = w_outDSP[143:96];   
     assign w_DSP3 = w_outDSP[191:144];*/
 
-    //saída das shift rams -> quantidade = tamanho kernel
+    //saÃ­da das shift rams -> quantidade = tamanho kernel
     wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
      
-    //last position of array
+    /*Saida = ultima posicao do w_outRAM 
+    a menos que KERNEL_SIZE == FM_SIZE pois nao sao usadas shiftrams*/
     always @(*) begin
         o_P = (KERNEL_SIZE != FM_SIZE) ?  
                         w_outRAM[(KERNEL_SIZE*48) - 1:(KERNEL_SIZE*48) - 48] :
                         w_outDSP[(KERNEL_SIZE*KERNEL_SIZE*48) - 1:(KERNEL_SIZE*KERNEL_SIZE*48) - 48];
     end
 
-    /*
-        A partir do momento em que i_en=1 começa o controlo
-        para saber quando o o_en=1
-
-        FM(4) K(4) delay(2)  
-        FM(4) K(3) delay(3)
-        FM(4) K(2) delay(4)
-        FM(4) K(1) delay(4)
-        FM(3) K(3) delay(2)
-        FM(3) K(2) delay(3)
-        FM(3) K(1) delay(4)
-        FM(2) K(2) delay(2)
-        FM(2) K(1) delay(3)
-    */
+    /*Controlo para enviar sinal para fora quando houver resultados validos da convolucao*/
     always @(posedge i_clk) begin
         if(i_en) begin
             r_out_cnt <= r_out_cnt + 1;
@@ -85,16 +75,16 @@ module PE #(
             if(r_cnt == 0) begin
                 if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
                     r_out_cnt <= 0;
-                    r_cnt <= 1;
+                    r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                 end
             end 
-            else if((r_out_cnt[4] != 1)) begin
-                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) )begin
+            else if((r_out_cnt[4] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
+                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) | (KERNEL_SIZE == 1)) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
                     o_en <= 1;
-                end 
+                end
                 else begin
+                    r_out_cnt <= -KERNEL_SIZE+2;//Intervalo entre valores validos
                     o_en <= 0;
-                    r_out_cnt <= -KERNEL_SIZE+2;
                 end
             end
                 
@@ -114,7 +104,7 @@ module PE #(
             [47:0]   [95:48]    [143:96]
     */
 
-    /*Número de shift rams é igual ao tamanho do kernel*/
+    /*NÃºmero de shift rams Ã© igual ao tamanho do kernel*/
     generate 
     genvar j;
     if(KERNEL_SIZE != FM_SIZE) begin
@@ -131,6 +121,7 @@ module PE #(
     end
     endgenerate  
 
+    /*Numero de DSPs = tamanho de pesos num filtro*/
     generate
     genvar i;
         for(i=0;i<KERNEL_SIZE*KERNEL_SIZE; i = i + 1) begin
@@ -193,7 +184,7 @@ module PE #(
                 //.PATTERNDETECT(PATTERNDETECT), 
                 //.UNDERFLOW(UNDERFLOW), 
                 //.CARRYOUT(CARRYOUT), 
-                .P(w_outDSP[(48*i)+47:48*i]), 
+                .P(w_outDSP[(48*i)+47:48*i]), //saida de cada DSP liga ao array global de saida das DSPs
                 //.XOROUT(XOROUT), 
                 //.ACIN(ACIN), 
                 //.BCIN(BCIN), 
@@ -206,11 +197,18 @@ module PE #(
                 .INMODE(5'd0), 
                 .OPMODE(9'b000110101), 
                 //.RSTINMODE(RSTINMODE), 
-                .A(i_DataFM), 
-                .B(i_Weight[(18*i)+17:18*i]),
-                /*
-                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]: (i!=0) ? w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48] :   0),
-                */ 
+                .A(i_DataFM), //dado
+                .B(i_Weight[(18*i)+17:18*i]),//peso
+                /*Primeio DSP recebe 0 na entrada C
+                    1 peso 1 DSP:
+                        As DSPs relativas aos pesos que estao na mesma linha do kernel, ligam-se diretamente (saida P de uma liga a entrada C de outra)
+                        Entre linhas as DSPs ligam a uma shiftram
+                    Exemplo: Filtro 3*3
+                        DSP0 - DSP1 - DSP2 - shiftram0 - DSP3 - DSP4 - DSP5 - shiftram1 - DSP6 - DSP7 - DSP8 - shiftram2
+                    Se  KERNEL_SIZE = FM_SIZE
+                        Nao sao usadas shiftrams pq os DSPs ligam-se todos, assim que a soma das multiplicacoes de todas as DSPs chegar Ã  saida, 
+                        nao havera intervalo entre valores validos (so havera um output), nao havendo necessidade de shiftrams
+                    */ 
                 .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]:  
                                                                 (i==0) ? 0 :
                                                                 (KERNEL_SIZE==FM_SIZE) ? w_outDSP[(48*i)-1:(48*i)-48] :
