@@ -21,8 +21,8 @@
 
 
 module PE #(
-    parameter KERNEL_SIZE = 1,
-    parameter FM_SIZE = 1
+    parameter KERNEL_SIZE = 2,
+    parameter FM_SIZE = 4
     )(
     input wire i_clk,
     input wire [8:0]INMODE, 
@@ -39,7 +39,8 @@ module PE #(
         W2 = (W1 - F + 2P) / S + 1
         H2 = (H1 - F + 2P) / S + 1
     */
-    reg [5:0] out_cnt;
+    reg [5:0] r_out_cnt;  
+    reg r_cnt;
     
     //saída de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
@@ -79,16 +80,43 @@ module PE #(
     */
     always @(posedge i_clk) begin
         if(i_en) begin
-            out_cnt <= out_cnt + 1;
-
-            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) + 2 ))
-                o_en <= 1; 
+            r_out_cnt <= r_out_cnt + 1;
+            /* verifica se foi dado o 1reset do count */
+            if(r_cnt == 0) begin
+                if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
+                    r_out_cnt <= 0;
+                    r_cnt <= 1;
+                end
+            end 
+            else begin
+                if(r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) begin
+                    o_en <= 1;
+                end
+                else begin
+                    r_out_cnt <= 0;
+                    o_en <= 0;
+                end
+            end
+                
         end
         else begin
+            r_cnt <= 0;
             o_en <= 0;
-            out_cnt <= 0;
+            r_out_cnt <= 0;
         end  
     end
+//    always @(posedge i_clk) begin
+//        if(i_en) begin
+//            out_cnt <= out_cnt + 1;
+
+//            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) + 2 ))
+//                o_en <= 1; 
+//        end
+//        else begin
+//            o_en <= 0;
+//            out_cnt <= 0;
+//        end  
+//    end
 
     /*
     2*2 ->  [95:48]  [191:144]
