@@ -31,18 +31,18 @@ module PE #(
     input wire signed [(KERNEL_SIZE*KERNEL_SIZE*18)-1:0] i_Weight,
     input wire i_en, 
 
-    output reg o_en, //sinal para dizer quando tem saÃ­da vÃ¡lida
+    output reg o_en, //sinal para dizer quando tem saída válida
     output reg signed [47:0] o_P
     );
     
-    /*tamanho da saÃ­da
+    /*tamanho da saída
         W2 = (W1 - F + 2P) / S + 1
         H2 = (H1 - F + 2P) / S + 1
     */
     reg [5:0] r_out_cnt;  
     reg r_cnt;
     
-    //saÃ­da de cada DSP
+    //saída de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
 
     /*wire [47:0] w_DSP0;
@@ -54,7 +54,7 @@ module PE #(
     assign w_DSP2 = w_outDSP[143:96];   
     assign w_DSP3 = w_outDSP[191:144];*/
 
-    //saÃ­da das shift rams -> quantidade = tamanho kernel
+    //saída das shift rams -> quantidade = tamanho kernel
     wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
      
     //last position of array
@@ -65,7 +65,7 @@ module PE #(
     end
 
     /*
-        A partir do momento em que i_en=1 comeÃ§a o controlo
+        A partir do momento em que i_en=1 começa o controlo
         para saber quando o o_en=1
 
         FM(4) K(4) delay(2)  
@@ -88,13 +88,13 @@ module PE #(
                     r_cnt <= 1;
                 end
             end 
-            else begin
-                if(r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) begin
+            else if((r_out_cnt[4] != 1)) begin
+                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) )begin
                     o_en <= 1;
-                end
+                end 
                 else begin
-                    r_out_cnt <= 0;
                     o_en <= 0;
+                    r_out_cnt <= -KERNEL_SIZE+2;
                 end
             end
                 
@@ -105,18 +105,6 @@ module PE #(
             r_out_cnt <= 0;
         end  
     end
-//    always @(posedge i_clk) begin
-//        if(i_en) begin
-//            out_cnt <= out_cnt + 1;
-
-//            if(out_cnt + 1 == ((FM_SIZE*KERNEL_SIZE) + 2 ))
-//                o_en <= 1; 
-//        end
-//        else begin
-//            o_en <= 0;
-//            out_cnt <= 0;
-//        end  
-//    end
 
     /*
     2*2 ->  [95:48]  [191:144]
@@ -126,7 +114,7 @@ module PE #(
             [47:0]   [95:48]    [143:96]
     */
 
-    /*NÃºmero de shift rams Ã© igual ao tamanho do kernel*/
+    /*Número de shift rams é igual ao tamanho do kernel*/
     generate 
     genvar j;
     if(KERNEL_SIZE != FM_SIZE) begin
