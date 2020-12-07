@@ -73,26 +73,43 @@ module PE #(
             r_out_cnt <= r_out_cnt + 1;
             /* verifica se foi dado o 1reset do count */
             if(r_cnt == 0) begin
-                if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
-                    r_out_cnt <= 0;
-                    r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
+                if(r_first_values == 0) begin
+                    if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
+                        r_out_cnt <= 0;
+                        r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
+                        r_first_values <= 1;
+                    end
+                end
+                else begin
+                     if(r_out_cnt + 2 == (FM_SIZE-1) + 2) begin
+                        r_out_cnt <= 0;
+                        r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
+                        r_first_values <= 1;
+                    end
                 end
             end 
             else if((r_out_cnt[$clog2(KERNEL_SIZE*FM_SIZE) +1] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
                 if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) | (KERNEL_SIZE == 1)) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
-                    o_en <= 1;
+                    if(r_out_cnt%STRIDE == 0) begin
+                        o_en <= 1;
+                    end
+                    else begin
+                        o_en <= 0;
+                    end
                 end
                 else begin
-                    r_out_cnt <= -KERNEL_SIZE+2;//Intervalo entre valores validos
+                    r_out_cnt <= -KERNEL_SIZE+2-(STRIDE-1)*FM_SIZE;//Intervalo entre valores validos
                     o_en <= 0;
                 end
-            end
+
+             end
                 
         end
         else begin
             r_cnt <= 0;
             o_en <= 0;
             r_out_cnt <= 0;
+            r_first_values <= 0;
         end  
     end
 
