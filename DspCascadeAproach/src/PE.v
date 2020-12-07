@@ -73,18 +73,14 @@ module PE #(
             r_out_cnt <= r_out_cnt + 1;
             /* verifica se foi dado o 1reset do count */
             if(r_cnt == 0) begin
-                if(r_first_values == 0) begin
-                    if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
-                        r_out_cnt <= 0;
-                        r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
-                        r_first_values <= 1;
-                    end
+                if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
+                    r_out_cnt <= 0;
+                    r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                 end
                 else begin
-                     if(r_out_cnt + 2 == (FM_SIZE-1) + 2) begin
-                        r_out_cnt <= 0;
-                        r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
-                        r_first_values <= 1;
+                    if(r_out_cnt + 2 == (FM_SIZE-1) + 2) begin
+                    r_out_cnt <= 0;
+                    r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                     end
                 end
             end 
@@ -109,7 +105,6 @@ module PE #(
             r_cnt <= 0;
             o_en <= 0;
             r_out_cnt <= 0;
-            r_first_values <= 0;
         end  
     end
 
