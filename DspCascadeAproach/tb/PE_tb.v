@@ -21,8 +21,8 @@
 
 
 module PE_tb #(
-  parameter KERNEL_SIZE = 1,
-  parameter FM_SIZE = 2,
+  parameter KERNEL_SIZE = 3,
+  parameter FM_SIZE = 3,
   parameter PADDING = 0,
   parameter STRIDE = 1
   )();
@@ -75,13 +75,11 @@ module PE_tb #(
       r_conv_result[r_index_clean] = 0;
     end
     i_en = 0;
-    OPMODE = 9'b110101;//somar o C M(resultado da multiplicao)
-    INMODE = 5'b100;
 
     i_DataFM = 30'b0;
-    i_Weight = {18'b1}; //1*1
+    //i_Weight = {18'b1}; //1*1
     //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1}; //2*2
-    //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //3*3
+    i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //3*3
     //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //4*4
     //i_Weight = {18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1
     //                            , 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1, 18'b1}; //5*5
@@ -94,7 +92,7 @@ module PE_tb #(
     i_DataFM = 30'b10;
   
     #10    
-    i_DataFM = -10;//num negativo
+    i_DataFM = 30'b11;//num negativo
 
     #10    
     i_DataFM = 30'b100;
@@ -186,13 +184,15 @@ module PE_tb #(
   /*Mandar sinal para terminar a convolução (i_en = 0)
   se FM_SIZE == KERNEL_SIZE so vem um resultado*/
   always @(posedge i_clk) begin
-    if(FM_SIZE == KERNEL_SIZE) begin
+    /*if(((FM_SIZE-KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2 == 1) begin
       if(r_conv_result_cnt == ((FM_SIZE-KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2)
         i_en <= 0;
     end
     else if(r_conv_result_cnt + 1 == ((FM_SIZE-KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2) begin
         i_en <= 0;
-    end
+    end*/
+    if(r_conv_result_cnt == ((FM_SIZE-KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2)
+        i_en <= 0;
   end
     
 endmodule
