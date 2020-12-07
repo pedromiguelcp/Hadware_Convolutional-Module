@@ -27,8 +27,6 @@ module PE #(
   parameter STRIDE = 1
 )(
     input wire i_clk,
-    input wire [8:0]INMODE, 
-    input wire [4:0] OPMODE, 
     input wire signed [29:0] i_DataFM, 
     input wire signed [(KERNEL_SIZE*KERNEL_SIZE*18)-1:0] i_Weight,
     input wire i_en, 

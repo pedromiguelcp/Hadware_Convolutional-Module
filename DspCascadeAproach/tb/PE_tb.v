@@ -28,8 +28,6 @@ module PE_tb #(
   )();
 
   reg i_clk;
-  reg [8:0] OPMODE;
-  reg [4:0] INMODE;
   
   reg signed [29:0] i_DataFM;
   reg i_en;
@@ -50,8 +48,6 @@ module PE_tb #(
     .STRIDE(STRIDE)
   )uut(
     .i_clk(i_clk), 
-    .INMODE(INMODE),
-    .OPMODE(OPMODE), 
     .i_DataFM(i_DataFM), 
     .i_Weight(i_Weight),
     .i_en(i_en),
