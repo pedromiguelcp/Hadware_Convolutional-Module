@@ -21,11 +21,11 @@
 
 
 module PE #(
-  parameter KERNEL_SIZE = 3,
-  parameter FM_SIZE = 4,
+  parameter KERNEL_SIZE = 1,
+  parameter FM_SIZE = 2,
   parameter PADDING = 0,
   parameter STRIDE = 1
-    )(
+)(
     input wire i_clk,
     input wire [8:0]INMODE, 
     input wire [4:0] OPMODE, 
@@ -41,7 +41,7 @@ module PE #(
         W2 = (W1 - F + 2P) / S + 1
         H2 = (H1 - F + 2P) / S + 1
     */
-    reg [5:0] r_out_cnt;  
+    reg [$clog2(KERNEL_SIZE*FM_SIZE) +1:0] r_out_cnt;//contar até KERNEL_SIZE*FM_SIZE + 1b para o sinal  
     reg r_cnt;
     
     //saída de cada DSP
@@ -78,7 +78,7 @@ module PE #(
                     r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                 end
             end 
-            else if((r_out_cnt[4] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
+            else if((r_out_cnt[$clog2(KERNEL_SIZE*FM_SIZE) +1] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
                 if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) | (KERNEL_SIZE == 1)) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
                     o_en <= 1;
                 end
@@ -104,7 +104,7 @@ module PE #(
             [47:0]   [95:48]    [143:96]
     */
 
-    /*Número de shift rams é igual ao tamanho do kernel*/
+    /*Número de shift rams = tamanho do kernel*/
     generate 
     genvar j;
     if(KERNEL_SIZE != FM_SIZE) begin
