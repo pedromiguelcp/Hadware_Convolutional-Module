@@ -18,11 +18,11 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+`include "global.v"
 
 module PE #(
-  parameter KERNEL_SIZE = 3,
-  parameter FM_SIZE = 3,
+  parameter KERNEL_SIZE = 4,
+  parameter FM_SIZE = 5,
   parameter PADDING = 0,
   parameter STRIDE = 1
 )(
@@ -45,10 +45,10 @@ module PE #(
     //saída de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
 
-
     //saída das shift rams -> quantidade = tamanho kernel
     wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
      
+
     /*Saida = ultima posicao do w_outRAM 
     a menos que KERNEL_SIZE == FM_SIZE pois nao sao usadas shiftrams*/
     always @(*) begin
@@ -69,12 +69,8 @@ module PE #(
                 end
             end 
             else if((r_out_cnt[$clog2(KERNEL_SIZE*FM_SIZE) +1] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
-                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) || (KERNEL_SIZE == 1)) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
-                    if((KERNEL_SIZE == 1) && STRIDE > 1 && (r_out_cnt  >= ((FM_SIZE-KERNEL_SIZE) + 1)))begin//se houver stride com kernel 1 também é preciso ignorar linhas
-                        o_en <= 0;
-                        r_out_cnt <= 2 - KERNEL_SIZE - (STRIDE-1)*FM_SIZE;//Intervalo entre valores validos
-                    end
-                    else if(r_out_cnt%STRIDE == 0) begin//rejeitar valores intermédios de acordo com o stride
+                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) || ((KERNEL_SIZE == 1) && (STRIDE == 1))) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
+                    if(r_out_cnt % STRIDE == 0) begin//rejeitar valores intermédios de acordo com o stride
                         o_en <= 1;
                     end
                     else
@@ -93,7 +89,6 @@ module PE #(
             r_out_cnt <= 0;
         end  
     end
-
 
     /*Número de shift rams = tamanho do kernel*/
     generate 
@@ -163,36 +158,36 @@ module PE #(
                 .MREG(0), 
                 .OPMODEREG(1), 
                 .PREG(1)
-                ) 
-                DSP48E2_inst (
-            //    .ACOUT(ACOUT), 
-            //    .BCOUT(BCOUT), 
-            //    .CARRYCASCOUT(CARRYCASCOUT), 
-            //    .MULTSIGNOUT(MULTSIGNOUT), 
-            //    .PCOUT(PCOUT), 
-            //    .OVERFLOW(OVERFLOW), 
-            //    .PATTERNBDETECT(PATTERNBDETECT), 
-            //    .PATTERNDETECT(PATTERNDETECT), 
-            //    .UNDERFLOW(UNDERFLOW), 
-            //    .CARRYOUT(CARRYOUT), 
+            ) 
+            DSP48E2_inst (
+                //.ACOUT(ACOUT), 
+                //.BCOUT(BCOUT), 
+                //.CARRYCASCOUT(CARRYCASCOUT), 
+                //.MULTSIGNOUT(MULTSIGNOUT), 
+                //.PCOUT(PCOUT), 
+                //.OVERFLOW(OVERFLOW), 
+                //.PATTERNBDETECT(PATTERNBDETECT), 
+                //.PATTERNDETECT(PATTERNDETECT), 
+                //.UNDERFLOW(UNDERFLOW), 
+                //.CARRYOUT(CARRYOUT), 
                 .P(w_outDSP[(48*i)+47:48*i]), 
-            //    .XOROUT(XOROUT), 
-            //    .ACIN(ACIN), 
-            //    .BCIN(BCIN), 
-            //    .CARRYCASCIN(CARRYCASCIN), 
-            //    .MULTSIGNIN(MULTSIGNIN), 
+                //.XOROUT(XOROUT), 
+                //.ACIN(ACIN), 
+                //.BCIN(BCIN), 
+                //.CARRYCASCIN(CARRYCASCIN), 
+                //.MULTSIGNIN(MULTSIGNIN), 
                 .PCIN(0),  
                 .ALUMODE(4'd0), 
                 .CARRYINSEL(3'd0), 
                 .CLK(i_clk), 
                 .INMODE(5'd0), // A * B
                 .OPMODE(9'b000110101), // (A * B) + C
-            //    .RSTINMODE(RSTINMODE), 
+                //.RSTINMODE(RSTINMODE), 
                 .A(i_DataFM), 
                 .B(i_Weight[(18*i)+17:18*i]),
                 .C((i>0) ? w_outDSP[(48*i)-1:(48*i)-48]: 0),  
                 .CARRYIN(1'd0), 
-            //    .D(D),
+                //.D(D),
                 .CEA1(1), 
                 .CEA2(1),
                 .CEAD(1), 
@@ -200,22 +195,22 @@ module PE #(
                 .CEB1(1), 
                 .CEB2(1), 
                 .CEC(1), 
-            //    .CECARRYIN(CECARRYIN), 
+                //.CECARRYIN(CECARRYIN), 
                 .CECTRL(1), 
-            //    .CED(CED), 
+                //.CED(CED), 
                 .CEINMODE(1), 
                 .CEM(1), 
                 .CEP(1), 
                 .RSTA(0), 
-            //    .RSTALLCARRYIN(RSTALLCARRYIN), 
+                //.RSTALLCARRYIN(RSTALLCARRYIN), 
                 .RSTALUMODE(0), 
                 .RSTB(0), 
                 .RSTC(0), 
                 .RSTCTRL(0), 
-            //    .RSTD(RSTD), 
+                //.RSTD(RSTD), 
                 .RSTM(0), 
                 .RSTP(0) 
-                );
+            );
         end
         end
         else for(i=0;i<KERNEL_SIZE*KERNEL_SIZE;i=i+1) begin
@@ -265,36 +260,36 @@ module PE #(
                 .MREG(0), 
                 .OPMODEREG(1), 
                 .PREG(1)
-                ) 
-                DSP48E2_inst (
-            //    .ACOUT(ACOUT), 
-            //    .BCOUT(BCOUT), 
-            //    .CARRYCASCOUT(CARRYCASCOUT), 
-            //    .MULTSIGNOUT(MULTSIGNOUT), 
-            //    .PCOUT(PCOUT), 
-            //    .OVERFLOW(OVERFLOW), 
-            //    .PATTERNBDETECT(PATTERNBDETECT), 
-            //    .PATTERNDETECT(PATTERNDETECT), 
-            //    .UNDERFLOW(UNDERFLOW), 
-            //    .CARRYOUT(CARRYOUT), 
+            ) 
+            DSP48E2_inst (
+                //.ACOUT(ACOUT), 
+                //.BCOUT(BCOUT), 
+                //.CARRYCASCOUT(CARRYCASCOUT), 
+                //.MULTSIGNOUT(MULTSIGNOUT), 
+                //.PCOUT(PCOUT), 
+                //.OVERFLOW(OVERFLOW), 
+                //.PATTERNBDETECT(PATTERNBDETECT), 
+                //.PATTERNDETECT(PATTERNDETECT), 
+                //.UNDERFLOW(UNDERFLOW), 
+                //.CARRYOUT(CARRYOUT), 
                 .P(w_outDSP[(48*i)+47:48*i]), 
-            //    .XOROUT(XOROUT), 
-            //    .ACIN(ACIN), 
-            //    .BCIN(BCIN), 
-            //    .CARRYCASCIN(CARRYCASCIN), 
-            //    .MULTSIGNIN(MULTSIGNIN), 
+                //.XOROUT(XOROUT), 
+                //.ACIN(ACIN), 
+                //.BCIN(BCIN), 
+                //.CARRYCASCIN(CARRYCASCIN), 
+                //.MULTSIGNIN(MULTSIGNIN), 
                 .PCIN(0),  
                 .ALUMODE(4'd0), 
                 .CARRYINSEL(3'd0), 
                 .CLK(i_clk), 
                 .INMODE(5'd0), 
                 .OPMODE(9'b000110101), 
-            //    .RSTINMODE(RSTINMODE), 
+                //.RSTINMODE(RSTINMODE), 
                 .A(i_DataFM), 
                 .B(i_Weight[(18*i)+17:18*i]),
                 .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]:  (i!=0) ? w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48] :   0),  
                 .CARRYIN(1'd0), 
-            //    .D(D),
+                //.D(D),
                 .CEA1(1), 
                 .CEA2(1),
                 .CEAD(1), 
@@ -302,22 +297,22 @@ module PE #(
                 .CEB1(1), 
                 .CEB2(1), 
                 .CEC(1), 
-            //    .CECARRYIN(CECARRYIN), 
+                //.CECARRYIN(CECARRYIN), 
                 .CECTRL(1), 
-            //    .CED(CED), 
+                //.CED(CED), 
                 .CEINMODE(1), 
                 .CEM(1), 
                 .CEP(1), 
                 .RSTA(0), 
-            //    .RSTALLCARRYIN(RSTALLCARRYIN), 
+                //.RSTALLCARRYIN(RSTALLCARRYIN), 
                 .RSTALUMODE(0), 
                 .RSTB(0), 
                 .RSTC(0), 
                 .RSTCTRL(0), 
-            //    .RSTD(RSTD), 
+                //.RSTD(RSTD), 
                 .RSTM(0), 
                 .RSTP(0) 
-                );
+            );
         end
     endgenerate
     
