@@ -27,12 +27,12 @@ module PE #(
   parameter STRIDE = 1
 )(
     input wire i_clk,
-    input wire signed [29:0] i_DataFM, 
-    input wire signed [(KERNEL_SIZE*KERNEL_SIZE*18)-1:0] i_Weight,
+    input wire signed [`A_DSP_WIDTH-1:0] i_DataFM, 
+    input wire signed [(KERNEL_SIZE*KERNEL_SIZE*`B_DSP_WIDTH)-1:0] i_Weight,
     input wire i_en, 
 
     output reg o_en, //sinal para dizer quando tem saída válida
-    output reg signed [47:0] o_P
+    output reg signed [`OUTPUT_DSP_WIDTH-1:0] o_P
     );
     
     /*tamanho da saída
@@ -96,12 +96,12 @@ module PE #(
     if(KERNEL_SIZE != FM_SIZE) begin
         for(j=0;j<KERNEL_SIZE*KERNEL_SIZE;j=j+KERNEL_SIZE) begin
             shift_bram #(
-                .RAM_WIDTH(48),
+                .RAM_WIDTH(`OUTPUT_DSP_WIDTH),
                 .RAM_DEPTH(FM_SIZE-KERNEL_SIZE)
             )ram(
                 .i_clk(i_clk),
-                .i_data(w_outDSP[(48*j)+((KERNEL_SIZE*48)-1):48*j+(KERNEL_SIZE-1)*48]),
-                .o_data(w_outRAM[(48*(j/KERNEL_SIZE))+47:48*(j/KERNEL_SIZE)])
+                .i_data(w_outDSP[(`OUTPUT_DSP_WIDTH*j)+((KERNEL_SIZE*`OUTPUT_DSP_WIDTH)-1):`OUTPUT_DSP_WIDTH*j+(KERNEL_SIZE-1)*`OUTPUT_DSP_WIDTH]),
+                .o_data(w_outRAM[(`OUTPUT_DSP_WIDTH*(j/KERNEL_SIZE))+(`OUTPUT_DSP_WIDTH-1):`OUTPUT_DSP_WIDTH*(j/KERNEL_SIZE)])
             );
         end
     end
@@ -170,7 +170,7 @@ module PE #(
                 //.PATTERNDETECT(PATTERNDETECT), 
                 //.UNDERFLOW(UNDERFLOW), 
                 //.CARRYOUT(CARRYOUT), 
-                .P(w_outDSP[(48*i)+47:48*i]), 
+                .P(w_outDSP[(`OUTPUT_DSP_WIDTH*i)+(`OUTPUT_DSP_WIDTH-1):`OUTPUT_DSP_WIDTH*i]), 
                 //.XOROUT(XOROUT), 
                 //.ACIN(ACIN), 
                 //.BCIN(BCIN), 
@@ -184,8 +184,8 @@ module PE #(
                 .OPMODE(9'b000110101), // (A * B) + C
                 //.RSTINMODE(RSTINMODE), 
                 .A(i_DataFM), 
-                .B(i_Weight[(18*i)+17:18*i]),
-                .C((i>0) ? w_outDSP[(48*i)-1:(48*i)-48]: 0),  
+                .B(i_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                .C((i>0) ? w_outDSP[(`OUTPUT_DSP_WIDTH*i)-1:(`OUTPUT_DSP_WIDTH*i)-`OUTPUT_DSP_WIDTH]: 0),  
                 .CARRYIN(1'd0), 
                 //.D(D),
                 .CEA1(1), 
@@ -272,7 +272,7 @@ module PE #(
                 //.PATTERNDETECT(PATTERNDETECT), 
                 //.UNDERFLOW(UNDERFLOW), 
                 //.CARRYOUT(CARRYOUT), 
-                .P(w_outDSP[(48*i)+47:48*i]), 
+                .P(w_outDSP[(`OUTPUT_DSP_WIDTH*i)+(`OUTPUT_DSP_WIDTH-1):`OUTPUT_DSP_WIDTH*i]), 
                 //.XOROUT(XOROUT), 
                 //.ACIN(ACIN), 
                 //.BCIN(BCIN), 
@@ -286,8 +286,9 @@ module PE #(
                 .OPMODE(9'b000110101), 
                 //.RSTINMODE(RSTINMODE), 
                 .A(i_DataFM), 
-                .B(i_Weight[(18*i)+17:18*i]),
-                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(48*i)-1:(48*i)-48]:  (i!=0) ? w_outRAM[48*(i/KERNEL_SIZE)-1:48*(i/KERNEL_SIZE)-48] :   0),  
+                .B(i_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(`OUTPUT_DSP_WIDTH*i)-1:(`OUTPUT_DSP_WIDTH*i)-`OUTPUT_DSP_WIDTH]:  (i!=0) ? 
+                                              w_outRAM[`OUTPUT_DSP_WIDTH*(i/KERNEL_SIZE)-1:`OUTPUT_DSP_WIDTH*(i/KERNEL_SIZE)-`OUTPUT_DSP_WIDTH] :   0),  
                 .CARRYIN(1'd0), 
                 //.D(D),
                 .CEA1(1), 
