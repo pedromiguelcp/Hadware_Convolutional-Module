@@ -105,7 +105,7 @@ module PE #(
             );
         end
     end
-    endgenerate  
+    endgenerate 
 
     /*Numero de DSPs = tamanho de pesos num filtro*/
     generate

@@ -7,5 +7,6 @@
 `define C_DSP_WIDTH         48
 `define D_DSP_WIDTH         27
 `define OUTPUT_DSP_WIDTH    48
+`define DW                  48
 
 `endif

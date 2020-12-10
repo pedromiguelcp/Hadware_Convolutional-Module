@@ -21,77 +21,159 @@
 
 
 module conv_blk#(
-  parameter KERNEL_SIZE = 3,
+  parameter KERNEL_SIZE = 1,
   parameter FM_SIZE = 4,
   parameter PADDING = 0,
-  parameter STRIDE = 1
+  parameter STRIDE = 1,
+  parameter MAXPOOL = 1,
+  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
 )(
     input wire i_clk,
     input wire i_rst,
+    input wire i_en_maxpool,
     input wire i_go, 
 
     output reg o_done,
-    output reg signed [47:0] o_conv_result//so serve para ver na sim pos implementacao
+    output reg signed [`DW-1:0] o_conv_result,//so serve para ver na sim pos implementacao
+    output reg signed [`DW*(OUT_SIZE / 2)-1:0] o_maxp_result//so serve para ver na sim pos implementacao
     );
 
-    reg signed [29:0] i_DataFM;
-    reg i_en;
-    reg signed [KERNEL_SIZE*KERNEL_SIZE*18-1:0] i_Weight;
-    /*tamanho da saida
-    W2 = (W1 - F + 2P) / S + 1
-    H2 = (H1 - F + 2P) / S + 1
-    */
-    reg signed [48-1:0] r_conv_result [((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2-1:0];//onde fica guardado o resultado da convoluçao
-    reg [$clog2(((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2)+1:0] r_conv_result_cnt, r_rect_result_cnt, r_index_clean;
-    reg [$clog2(KERNEL_SIZE*KERNEL_SIZE)+1:0] j;//posso usar isto no ciclo for?
-    wire o_en, o_en_result;
-    wire signed [47:0] o_P, o_data;
+    reg signed [`A_DSP_WIDTH-1:0] r_fm_data;    
+    reg signed [KERNEL_SIZE*KERNEL_SIZE*18-1:0] r_weight_data;
 
-    /*Mandar sinal para terminar a convolução (i_en = 0)*/
+    reg signed [`DW-1:0] r_conv_result [OUT_SIZE**2-1:0];//registo para os resultados da convolucao
+    reg signed [`DW-1:0] r_maxp_result [(OUT_SIZE / 2)**2-1:0];//registo para os resultados da convolucao com maxpooling
+    reg signed [`DW-1:0] r_relu_result [OUT_SIZE / 2 - 1:0];//registo para os resultados que saiem do bloco ReLU e entrar no bloco maxpool
+    reg [$clog2(OUT_SIZE**2)+1:0] r_o_PE_cnt, r_o_ReLU_cnt, r_index_clean;
+    reg r_mp_en [OUT_SIZE / 2 - 1:0];
+    reg r_en_PE, r_clean_maxp;
+
+    wire signed [`DW-1:0] r_maxpool_result [OUT_SIZE / 2 - 1:0];
+    wire signed [`DW-1:0] w_o_data_PE, w_o_data_ReLU;
+    wire w_o_PE, w_o_ReLU;
+    
+    integer i, j;
+
+    /***************************************************
+    Controlo sobre os pesos e valores do feature map que 
+    sao enviados para o PE
+    ***************************************************/
     always @(posedge i_clk) begin
         if(i_rst)begin
-            i_DataFM <= 0;
-            i_en <= 0;
+            r_fm_data <= 0;
+            r_en_PE <= 0;
             o_done <= 0;
             
-            for(j = 0; j < KERNEL_SIZE*KERNEL_SIZE; j = j + 1) begin//pesos todos com valor 1
-                i_Weight[j*18 +: 18] <= 1;
+            //pesos com valor = 1 para facilitar validacoes
+            for(j = 0; j < KERNEL_SIZE*KERNEL_SIZE; j = j + 1) begin
+                r_weight_data[j*18 +: 18] <= 1;
             end
+            
         end
-        else if(i_go) begin
-            if(r_conv_result_cnt == ((FM_SIZE-KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2) begin//já saíram todos os resultados válidos da convolucao
-                i_en <= 0;
+        else if(i_go && !o_done) begin
+            //feature map com valores incrementais
+            r_fm_data <= r_fm_data + 1;
+            //novo dado para o PE
+            r_en_PE <= 1;
+            
+            //ja sairam todos os resultados validos do PE
+            if(r_o_PE_cnt == OUT_SIZE**2) begin
+                //mais nenhum valor vai ser enviado para o PE
+                r_en_PE <= 0;
+                //parar de enviar valores
                 o_done <= 1;
             end
-            else if(!o_done) begin
-                i_DataFM <= i_DataFM + 1;//feature map com valores incrementais
-                i_en <= 1;
-            end
         end
     end
 
 
-    /*Guardar os resultados das convolucoes*/
+    /***************************************************
+    Monitorizacao de quantos valores sairam do PE
+    ***************************************************/
     always @(posedge i_clk) begin
         if(i_rst)
-            r_conv_result_cnt <= 0;
-        else if(o_en)
-            r_conv_result_cnt <= r_conv_result_cnt + 1;
+            r_o_PE_cnt <= 0;
+        else if(w_o_PE)
+            r_o_PE_cnt <= r_o_PE_cnt + 1;
     end
 
+    
+    /***************************************************
+    Monitorizacao e armazenamento da saida do bloco ReLU
+    ***************************************************/
     always @(posedge i_clk) begin
         if(i_rst) begin
-            r_rect_result_cnt <= 0;
+            r_o_ReLU_cnt <= 0;
             o_conv_result <= 0;
 
-            for(r_index_clean = 0; r_index_clean < ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE + 1)**2; r_index_clean = r_index_clean + 1)begin
+            //inicializacao do array para guardar os valores que saiem do bloco ReLU
+            for(r_index_clean = 0; r_index_clean < OUT_SIZE**2; r_index_clean = r_index_clean + 1)begin
                 r_conv_result[r_index_clean] <= 0;
             end
         end  
-        else if(o_en_result) begin
-            r_rect_result_cnt <= r_rect_result_cnt + 1;
-            r_conv_result[r_rect_result_cnt] <= o_data;//dados que vem do bloco ReLU
-            o_conv_result <= o_data;  
+        else if(w_o_ReLU) begin
+            r_o_ReLU_cnt <= r_o_ReLU_cnt + 1;
+            //dados que vem do bloco ReLU, dps serao escritos numa memoria externa ou bram
+            r_conv_result[r_o_ReLU_cnt] <= w_o_data_ReLU;
+            //para monitorizacao do resultado da convolucao em simulacao pos implementacao
+            o_conv_result <= w_o_data_ReLU;
+        end
+    end
+
+
+    /***************************************************
+    Monitorizacao e armazenamento da saida do bloco ReLU
+    ***************************************************/
+    always @(posedge i_clk) begin
+        if(i_rst) begin
+            r_clean_maxp <= 0;
+            
+            //Inicializacao dos arrays de entrada e saida do bloco maxpool
+            for(i = 0; i < OUT_SIZE/2; i = i + 1)begin
+                r_relu_result[i] <= 0;
+                r_mp_en[i] <= 0;
+            end
+            for(i = 0; i < (OUT_SIZE / 2)**2; i = i + 1)begin
+                r_maxp_result[i] <= 0;
+            end
+        end
+        else if(w_o_ReLU && MAXPOOL) begin
+            //posicoes do array sao preenchidas com valores que saiem do bloco ReLU e vao para os blocos maxpool
+            r_relu_result[(r_o_ReLU_cnt/2) - ((r_o_ReLU_cnt / OUT_SIZE) * (OUT_SIZE / 2))] <= w_o_data_ReLU;
+
+            //de duas em duas linhas de saida do bloco ReLU, sao lidas as saidas dos blocos maxpool
+            if((r_o_ReLU_cnt % (2*OUT_SIZE)) == 0 && r_o_ReLU_cnt > 0) begin
+                
+                //ler a saida dos blocos maxpool
+                for(i = 0; i < (OUT_SIZE/2); i = i +1) begin
+
+                    //concatenar com resultados ja lidos dos blocos maxpool
+                    r_maxp_result[i + (r_o_ReLU_cnt / (OUT_SIZE * 2) -1) * (OUT_SIZE / 2)] <= r_maxpool_result[i];
+
+                    //guardar valores para ver em simulacao pos implementacao
+                    o_maxp_result[`DW*i +: `DW] <= r_maxpool_result[i];
+
+                    //limpar o array que alimenta o bloco maxpool com dados vindos do bloco ReLU
+                    //para que os blocos maxpool nao consumam valores antigos e ja processados
+                    if(i>0)
+                        //a primeira posicao ja foi preenchida com um novo valor, as restantes sao limpas
+                        r_relu_result[i] <= 0;
+                end
+
+                //sinal para os blocos maxpool limparam o registo dos maiores valores recebidos anteriormente
+                r_clean_maxp <= 1;
+
+                //primeiro bloco maxpool ja esta a receber um novo valor
+                r_mp_en[0] <= 1;
+            end
+            else begin
+                r_mp_en[0] <= 0;
+                r_clean_maxp <= 0;
+            end
+        end
+        else begin
+            r_mp_en[0] <= 0;
+            r_clean_maxp <= 0;
         end
     end
 
@@ -103,52 +185,36 @@ module conv_blk#(
         .STRIDE(STRIDE)
     )uut(
         .i_clk(i_clk), 
-        .i_DataFM(i_DataFM), 
-        .i_Weight(i_Weight),
-        .i_en(i_en),
+        .i_DataFM(r_fm_data), 
+        .i_Weight(r_weight_data),
+        .i_en(r_en_PE),
 
-        .o_en(o_en),
-        .o_P(o_P)
+        .o_en(w_o_PE),
+        .o_P(w_o_data_PE)
     );
 
     relu uut1(
         .i_clk(i_clk), 
-        .i_data(o_P),
-        .i_en(o_en), 
+        .i_data(w_o_data_PE),
+        .i_en(w_o_PE), 
 
-        .o_en(o_en_result),
-        .o_data(o_data)
+        .o_en(w_o_ReLU),
+        .o_data(w_o_data_ReLU)
     );
+    
+    generate 
+    genvar m;
+        if(MAXPOOL)
+            for(m = 0; m < (((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE + 1) / 2); m = m +1) begin
+                maxpool maxpool_inst (
+                    .i_clk(i_clk),
+                    .i_rst(i_rst),
+                    .i_clean(r_clean_maxp),//para limpar o maior valor das outras operacoes e poder reutilizar os modulos
+                    .i_en_mp(r_mp_en[m]),//serve para guardar entrada e ao mesmo tempo limpar o max
+                    .i_data(r_relu_result[m]),
 
-
-    /*bram #(
-        .ADDR_WIDTH($clog2(FM_SIZE**2)),
-        .RAM_WIDTH(48),
-        .RAM_DEPTH(FM_SIZE**2),
-        .RAM_PORTS(1)
-    )featuremap(
-        .i_clk(i_clk), 
-        .i_r_addrs(i_r_addrs), 
-        .i_w_addrs(i_w_addrs),
-        .i_wr_en(i_wr_en),
-        .i_data(i_data),
-
-        .o_data(o_data)
-    );
-
-    bram #(
-        .ADDR_WIDTH($clog2(KERNEL_SIZE**2)),
-        .RAM_WIDTH(48),
-        .RAM_DEPTH(KERNEL_SIZE**2),
-        .RAM_PORTS(1)
-    )weights(
-        .i_clk(i_clk), 
-        .i_r_addrs(i_r_addrs), 
-        .i_w_addrs(i_w_addrs),
-        .i_wr_en(i_wr_en),
-        .i_data(i_data),
-
-        .o_data(o_data)
-    );*/
-
+                    .o_data(r_maxpool_result[m])
+                );
+            end 
+    endgenerate
 endmodule
