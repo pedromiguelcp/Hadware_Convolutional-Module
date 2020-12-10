@@ -14,6 +14,6 @@
 `define FM_SIZE             5
 `define PADDING             0
 `define STRIDE              1
-`define MAXPOOL             0
+`define MAXPOOL             1
 
 `endif
