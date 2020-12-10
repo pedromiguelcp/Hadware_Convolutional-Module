@@ -9,4 +9,11 @@
 `define OUTPUT_DSP_WIDTH    48
 `define DW                  48
 
+
+`define KERNEL_SIZE         4
+`define FM_SIZE             5
+`define PADDING             0
+`define STRIDE              1
+`define MAXPOOL             0
+
 `endif
