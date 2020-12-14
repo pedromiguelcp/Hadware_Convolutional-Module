@@ -18,13 +18,13 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+`include "global.v"
 
 module maxpool#(
-    parameter KERNEL_SIZE = 3,
-    parameter FM_SIZE = 4,
-    parameter PADDING = 0,
-    parameter STRIDE = 1
+  parameter KERNEL_SIZE = `KERNEL_SIZE,
+  parameter FM_SIZE = `FM_SIZE,
+  parameter PADDING = `PADDING,
+  parameter STRIDE = `STRIDE
 )(
     input wire i_clk,
     input wire i_rst,

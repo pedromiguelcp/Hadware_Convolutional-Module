@@ -21,12 +21,14 @@
 `include "global.v"
 
 module PE #(
-  parameter KERNEL_SIZE = 4,
-  parameter FM_SIZE = 5,
-  parameter PADDING = 0,
-  parameter STRIDE = 1
+  parameter KERNEL_SIZE = `KERNEL_SIZE,
+  parameter FM_SIZE = `FM_SIZE,
+  parameter PADDING = `PADDING,
+  parameter STRIDE = `STRIDE,
+  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
 )(
     input wire i_clk,
+    input wire i_rst,
     input wire signed [`A_DSP_WIDTH-1:0] i_DataFM, 
     input wire signed [(KERNEL_SIZE*KERNEL_SIZE*`B_DSP_WIDTH)-1:0] i_Weight,
     input wire i_en, 
@@ -39,8 +41,9 @@ module PE #(
         W2 = (W1 - F + 2P) / S + 1
         H2 = (H1 - F + 2P) / S + 1
     */
-    reg [$clog2(KERNEL_SIZE*FM_SIZE) +1:0] r_out_cnt;//contar até KERNEL_SIZE*FM_SIZE + 1b para o sinal  
+    reg [31:0] r_out_cnt;//contar até KERNEL_SIZE*FM_SIZE + 1b para o sinal  
     reg r_cnt;
+    integer int_conv_cnt;
     
     //saída de cada DSP
     wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
@@ -59,7 +62,11 @@ module PE #(
 
     /*Controlo para enviar sinal para fora quando houver resultados validos da convolucao*/
     always @(posedge i_clk) begin
-        if(i_en) begin
+        if(i_rst) begin
+            r_out_cnt <= 0;
+            int_conv_cnt <= 0;
+        end
+        else if(i_en) begin
             r_out_cnt <= r_out_cnt + 1;
             /* verifica se foi dado o 1reset do count */
             if(r_cnt == 0) begin
@@ -68,10 +75,11 @@ module PE #(
                     r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                 end
             end 
-            else if((r_out_cnt[$clog2(KERNEL_SIZE*FM_SIZE) +1] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
+            else if((r_out_cnt[31] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
                 if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) || ((KERNEL_SIZE == 1) && (STRIDE == 1))) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
-                    if(r_out_cnt % STRIDE == 0) begin//rejeitar valores intermédios de acordo com o stride
+                    if(r_out_cnt % STRIDE == 0 && (int_conv_cnt < OUT_SIZE**2)) begin//rejeitar valores intermédios de acordo com o stride
                         o_en <= 1;
+                        int_conv_cnt <= int_conv_cnt + 1;
                     end
                     else
                         o_en <= 0;
@@ -81,7 +89,8 @@ module PE #(
                     o_en <= 0;
                 end
             end
-                
+            else
+                o_en <= 0;
         end
         else begin
             r_cnt <= 0;

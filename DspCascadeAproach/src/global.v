@@ -11,9 +11,10 @@
 
 
 `define KERNEL_SIZE         4
-`define FM_SIZE             5
+`define FM_SIZE             6
 `define PADDING             0
 `define STRIDE              1
+//usar maxpool quando saida par
 `define MAXPOOL             0
 
 `endif
