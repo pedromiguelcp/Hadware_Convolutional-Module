@@ -21,8 +21,8 @@
 
 
 module conv_blk_tb #(
-  parameter KERNEL_SIZE = 1,
-  parameter FM_SIZE = 4,
+  parameter KERNEL_SIZE = 3,
+  parameter FM_SIZE = 6,
   parameter PADDING = 0,
   parameter STRIDE = 1,
   parameter MAXPOOL = 1,

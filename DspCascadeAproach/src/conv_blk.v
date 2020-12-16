@@ -50,7 +50,7 @@ module conv_blk#(
     wire signed [`DW-1:0] w_o_data_PE, w_o_data_ReLU;
     wire w_o_PE, w_o_ReLU;
     
-    integer i, j, k, int_maxpool_cnt;
+    integer i, j, k, int_maxpool_cnt, int_last_maxpool;
 
 
     /***************************************************
@@ -115,6 +115,7 @@ module conv_blk#(
             r_clean_maxp <= 0;
             r_mp_out_rdy <= 0;
             int_maxpool_cnt <= 0;
+            int_last_maxpool <= 0;
             
             //Inicializacao dos arrays de entrada e saida do bloco maxpool
             for(i = 0; i < OUT_SIZE/2; i = i + 1)begin
@@ -127,13 +128,13 @@ module conv_blk#(
             r_relu_result[(r_o_ReLU_cnt/2) - ((r_o_ReLU_cnt / OUT_SIZE) * (OUT_SIZE / 2))] <= w_o_data_ReLU;
 
             //de duas em duas linhas de saida do bloco ReLU, sao lidas as saidas dos blocos maxpool
-            if((r_o_ReLU_cnt % (2*OUT_SIZE)) == 0 && r_o_ReLU_cnt > 0) begin
-                
+            if((r_o_ReLU_cnt % (2*OUT_SIZE)) == 0 && r_o_ReLU_cnt > 0 && int_last_maxpool != r_o_ReLU_cnt) begin
+                int_maxpool_cnt <= int_maxpool_cnt + OUT_SIZE/2;
                 //ler a saida dos blocos maxpool
                 for(i = 0; i < (OUT_SIZE/2); i = i +1) begin
-
+                    //para lidar com o delay entre linhas
+                    int_last_maxpool <= r_o_ReLU_cnt;
                     //guardar valores
-                    int_maxpool_cnt <= int_maxpool_cnt + OUT_SIZE/2;
                     r_maxp_result[i] <= r_maxpool_result[i];
 
                     //limpar o array que alimenta o bloco maxpool com dados vindos do bloco ReLU
@@ -177,15 +178,15 @@ module conv_blk#(
             o_en <= 1;
             o_conv_result <= w_o_data_ReLU;
         end
-        else if(r_mp_out_rdy) begin
-            //sinal para começar a enviar os resultados do maxpool para a saida
-            k <= 0;
-        end
         else if(k < OUT_SIZE / 2) begin
             //se houver maxpool, k = 0, e inicia-se o envio dos resultados um a um
             o_en <= 1;
             k <= k + 1;
             o_conv_result <= r_maxp_result[k];
+        end
+        else if(r_mp_out_rdy) begin
+            //sinal para começar a enviar os resultados do maxpool para a saida
+            k <= 0;
         end
         else
             o_en <= 0;
