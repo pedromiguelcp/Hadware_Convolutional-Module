@@ -20,90 +20,81 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module PE_tb();
+module PE_tb #(
+  parameter KERNEL_SIZE = 1,
+  parameter FM_SIZE = 4,
+  parameter PADDING = 0,
+  parameter STRIDE = 1,
+  parameter MAXPOOL = 1,
+  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
+  )();
 
-    reg i_clk;
-    reg [8:0] OPMODE;
-    reg [4:0] INMODE;
+  reg i_clk, i_rst, i_go;
+  wire o_done;
+  wire signed [48-1:0] ouput_conv;
+  wire signed [48*(OUT_SIZE / 2)-1:0] ouput_maxp;
+  
+  //depois talvez se passe para o modulo o address de onde estao
+  //pesos e o feature map e ele so vai ler
+  conv_blk #(
+    .KERNEL_SIZE(KERNEL_SIZE),
+    .FM_SIZE(FM_SIZE),
+    .PADDING(PADDING),
+    .STRIDE(STRIDE),
+    .MAXPOOL(MAXPOOL)
+  )convolutional_block(
+    .i_clk(i_clk), 
+    .i_rst(i_rst), 
+    .i_go(i_go),
     
-    reg signed [29:0] i_DataFM;
-    reg signed [26:0] i_D;
-    reg signed [71:0] i_Weight;
-    wire signed [47:0] o_P;
-    
-    PE #(
-      .KERNEL_SIZE(4)
-      )uut(
-      .i_clk(i_clk), 
-      .INMODE(INMODE),
-      .OPMODE(OPMODE), 
-      .i_DataFM(i_DataFM), 
-      .i_Weight(i_Weight),
-      .i_D(i_D),
-      .o_P(o_P)
-    );
-      
-    always #5 i_clk = ~i_clk;
-    
-    initial begin
-      i_clk = 0;
-      OPMODE = 9'b000110101;//somar o C M(resultado da multiplica��o)
+    .o_done(o_done),
+    .o_conv_result(ouput_conv),
+    .o_maxp_result(ouput_maxp)
+  );
 
-      INMODE = 5'b00100;
-      i_D = 27'b000000000000000000000000000;
+  /*bram #(
+    .ADDR_WIDTH($clog2(FM_SIZE**2)),
+    .RAM_WIDTH(48),
+    .RAM_DEPTH(FM_SIZE**2),
+    .RAM_PORTS(1)
+  )featuremap(
+    .i_clk(i_clk), 
+    .i_r_addrs(o_read_fm_bram), 
+    .i_w_addrs(i_w_addrs),
+    .i_wr_en(i_wr_fm_en),
+    .i_data(i_fm),
 
-      i_DataFM = 30'b000000000000000000000000000000;
-      i_Weight = 72'b000000000000000010_000000000000000001_000000000000000010_000000000000000001; 
+    .o_data(o_fm_bram)
+  );
 
-      #150    
-      i_DataFM = 30'b000000000000000000000000000001;
+  bram #(
+    .ADDR_WIDTH($clog2(KERNEL_SIZE**2)),
+    .RAM_WIDTH(48),
+    .RAM_DEPTH(KERNEL_SIZE**2),
+    .RAM_PORTS(1)
+  )weights(
+    .i_clk(i_clk), 
+    .i_r_addrs(o_read_weight_bram), 
+    .i_w_addrs(i_w_addrs),
+    .i_wr_en(i_wr_weight_en),
+    .i_data(i_weight),
 
-      #10    
-      i_DataFM = 30'b000000000000000000000000000010;
-    
-      #10    
-      i_DataFM = 30'b000000000000000000000000000011;
+    .o_data(o_weight)
+  );*/
 
-      #10    
-      i_DataFM = 30'b000000000000000000000000000100;
+  always #5 i_clk = ~i_clk;
+  
+  initial begin
+    i_clk = 0;
+    i_rst = 1;
+    i_go = 0;
 
-      #10    
-      i_DataFM = 30'b000000000000000000000000000101;
+    #150
+    i_rst = 0;
+    i_go = 1;
+   
+    #100 
+    $finish;
+  end
 
-      #10    
-      i_DataFM = 30'b000000000000000000000000000110;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000000111;
-
-      #10   
-      i_DataFM = 30'b000000000000000000000000001000;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000001001;
-      
-      #10    
-      i_DataFM = 30'b000000000000000000000000001010;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000001011;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000001100;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000001101;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000001110;
-
-      #10   
-      i_DataFM = 30'b000000000000000000000000001111;
-
-      #10    
-      i_DataFM = 30'b000000000000000000000000010000;
-
-      $finish;
-    end
-    
 endmodule
