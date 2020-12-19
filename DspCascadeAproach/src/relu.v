@@ -18,20 +18,20 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+`include "global.v"
 
 module relu(
     input i_clk,
-    input wire signed [47:0] i_data,
+    input wire signed [`DW-1:0] i_data,
     input wire i_en,
 
     output reg o_en,
-    output reg signed [47:0] o_data
+    output reg signed [`DW-1:0] o_data
     );
 
     always @(posedge i_clk) begin
         if(i_en) begin
-            if(i_data[47]) begin//num negativo
+            if(i_data[`DW-1]) begin//num negativo
                 o_data <= 0;
             end
             else begin

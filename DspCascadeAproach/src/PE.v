@@ -37,10 +37,6 @@ module PE #(
     output reg signed [`OUTPUT_DSP_WIDTH-1:0] o_P
     );
     
-    /*tamanho da saída
-        W2 = (W1 - F + 2P) / S + 1
-        H2 = (H1 - F + 2P) / S + 1
-    */
     reg [31:0] r_out_cnt;//contar até KERNEL_SIZE*FM_SIZE + 1b para o sinal  
     reg r_cnt;
     integer int_conv_cnt;
@@ -62,6 +58,7 @@ module PE #(
 
     /*Controlo para enviar sinal para fora quando houver resultados validos da convolucao*/
     always @(posedge i_clk) begin
+        o_en <= 0;
         if(i_rst) begin
             r_out_cnt <= 0;
             int_conv_cnt <= 0;
@@ -81,20 +78,14 @@ module PE #(
                         o_en <= 1;
                         int_conv_cnt <= int_conv_cnt + 1;
                     end
-                    else
-                        o_en <= 0;
                 end
                 else begin
                     r_out_cnt <= 2 - KERNEL_SIZE - (STRIDE-1)*FM_SIZE;//Intervalo entre valores validos
-                    o_en <= 0;
                 end
             end
-            else
-                o_en <= 0;
         end
         else begin
             r_cnt <= 0;
-            o_en <= 0;
             r_out_cnt <= 0;
         end  
     end

@@ -10,8 +10,8 @@
 `define DW                  48
 
 
-`define KERNEL_SIZE         4
-`define FM_SIZE             6
+`define KERNEL_SIZE         3
+`define FM_SIZE             250
 `define PADDING             0
 `define STRIDE              1
 //usar maxpool quando saida par
