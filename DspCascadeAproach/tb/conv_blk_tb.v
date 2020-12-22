@@ -22,25 +22,25 @@
 
 module conv_blk_tb #(
   parameter KERNEL_SIZE = 3,
-  parameter FM_SIZE = 250,
+  parameter FM_SIZE = 10,
   parameter PADDING = 0,
   parameter STRIDE = 1,
   parameter MAXPOOL = 0,
   localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
   )();
 
-  reg i_clk, i_rst, i_go;
+  reg i_clk, i_rst, i_go, weight_en;
   wire w_o_en;
   wire signed [48-1:0] w_o_conv_blk;
   wire signed [48*(OUT_SIZE / 2)-1:0] ouput_maxp;
 
   reg signed [30-1:0] i_fm_data;
-  reg signed [(KERNEL_SIZE**2)*18-1:0] i_weight_data;
+  reg signed [18-1:0] i_weight_data;
   
   reg signed [30-1:0] FM_data [0:(FM_SIZE*FM_SIZE)-1];
   reg signed [18-1:0] KERNEL_data [0:(KERNEL_SIZE*KERNEL_SIZE)-1];
   
-  integer i, j, out_data;
+  integer i, j, out_data, out_cnt;
   
   conv_blk #(
     .KERNEL_SIZE(KERNEL_SIZE),
@@ -53,6 +53,7 @@ module conv_blk_tb #(
     .i_rst(i_rst), 
     .i_go(i_go),
     .i_fm_data(i_fm_data),
+    .i_weight_en(weight_en),
     .i_weight_data(i_weight_data),
     
     .o_en(w_o_en),
@@ -110,7 +111,6 @@ module conv_blk_tb #(
   always @(posedge i_clk) begin
     if(i_go == 1 && (i < FM_SIZE*FM_SIZE)) begin
       i_fm_data <= FM_data[i+1];
-      //i_fm_data <= i+2;
       i <= i+1;
     end
   end
@@ -118,7 +118,8 @@ module conv_blk_tb #(
   always@(posedge i_clk) begin
     if(w_o_en) begin
       $fwrite(out_data,"%0d\n", (w_o_conv_blk));  
-      $display("%0d\n", w_o_conv_blk);  
+      $display("%0d\n", w_o_conv_blk); 
+      out_cnt <= out_cnt + 1; 
     end 
   end
  
@@ -131,21 +132,30 @@ module conv_blk_tb #(
     i_clk = 0;
     i_rst = 1;
     i_go = 0;
+    weight_en = 0;
     i_fm_data <= FM_data[0];
     i <= 0;
+    out_cnt <= 0;
 
-    for(j = 0; j<KERNEL_SIZE**2; j=j+1)begin
-      i_weight_data[j*18 +: 18] <= KERNEL_data[j];
-    end
 
+    
     #150
     i_rst = 0;
-    i_go = 1;
+    weight_en = 1;
+    for(j = 0; j<KERNEL_SIZE**2; j=j+1)begin
+      i_weight_data[18-1:0] <= KERNEL_data[j];
+      #10;
+    end
 
-    #690000 
-    
-    #100 
-    $finish;
+    #20;
+    weight_en = 0;
+    i_go = 1;   
+
+    while(!(((out_cnt == OUT_SIZE**2 -1) && (MAXPOOL == 0)) || ((out_cnt == (OUT_SIZE / 2)**2 -1) && (MAXPOOL == 1))))begin 
+      #10;
+    end
+    #50
+    $finish; 
   end
 
 endmodule
