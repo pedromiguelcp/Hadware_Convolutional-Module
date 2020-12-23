@@ -21,11 +21,14 @@
 `include "global.v"
 
 module PE #(
-  parameter KERNEL_SIZE = `KERNEL_SIZE,
-  parameter FM_SIZE = `FM_SIZE,
-  parameter PADDING = `PADDING,
-  parameter STRIDE = `STRIDE,
-  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
+    parameter  KERNEL_SIZE = `KERNEL_SIZE,
+    parameter  FM_SIZE     = `FM_SIZE,
+    parameter  PADDING     = `PADDING,
+    parameter  STRIDE      = `STRIDE,
+    parameter  MAXPOOL     = `MAXPOOL,
+    parameter  IN_FM_CH    = `IN_FM_CH,
+    parameter  OUT_FM_CH   = `OUT_FM_CH,
+    localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
 )(
     input wire i_clk,
     input wire i_rst,
@@ -51,7 +54,7 @@ module PE #(
     /*Saida = ultima posicao do w_outRAM 
     a menos que KERNEL_SIZE == FM_SIZE pois nao sao usadas shiftrams*/
     always @(*) begin
-        o_P = (KERNEL_SIZE != FM_SIZE) ?  
+        o_P = (KERNEL_SIZE != (FM_SIZE + 2*PADDING)) ?  
                         w_outRAM[(KERNEL_SIZE*48) - 1:(KERNEL_SIZE*48) - 48] :
                         w_outDSP[(KERNEL_SIZE*KERNEL_SIZE*48) - 1:(KERNEL_SIZE*KERNEL_SIZE*48) - 48];
     end
@@ -67,20 +70,20 @@ module PE #(
             r_out_cnt <= r_out_cnt + 1;
             /* verifica se foi dado o 1reset do count */
             if(r_cnt == 0) begin
-                if(r_out_cnt + 2 == (KERNEL_SIZE*FM_SIZE) + 2) begin
+                if(r_out_cnt + 2 == (KERNEL_SIZE*(FM_SIZE + 2*PADDING)) + 2) begin
                     r_out_cnt <= 0;
                     r_cnt <= 1;//No proximo clock comeca a sair resultados da convolucao
                 end
             end 
             else if((r_out_cnt[31] != 1)) begin//enquanto r_out_cnt < 0 os resultados sao invalidos (intervalos), portanto sinal o_en mantem-se 0
-                if((r_out_cnt  < ((FM_SIZE-KERNEL_SIZE) + 1)) || ((KERNEL_SIZE == 1) && (STRIDE == 1))) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
+                if((r_out_cnt  < (((FM_SIZE + 2*PADDING)-KERNEL_SIZE) + 1)) || ((KERNEL_SIZE == 1) && (STRIDE == 1))) begin//se KERNEL_SIZE=1 ou enquanto saem os resultados de uma linha, valores sao sempre validos
                     if(r_out_cnt % STRIDE == 0 && (int_conv_cnt < OUT_SIZE**2)) begin//rejeitar valores intermédios de acordo com o stride
                         o_en <= 1;
                         int_conv_cnt <= int_conv_cnt + 1;
                     end
                 end
                 else begin
-                    r_out_cnt <= 2 - KERNEL_SIZE - (STRIDE-1)*FM_SIZE;//Intervalo entre valores validos
+                    r_out_cnt <= 2 - KERNEL_SIZE - (STRIDE-1)*(FM_SIZE + 2*PADDING);//Intervalo entre valores validos
                 end
             end
         end
@@ -93,11 +96,11 @@ module PE #(
     /*Número de shift rams = tamanho do kernel*/
     generate 
     genvar j;
-    if(KERNEL_SIZE != FM_SIZE) begin
+    if(KERNEL_SIZE != (FM_SIZE + 2*PADDING)) begin
         for(j=0;j<KERNEL_SIZE*KERNEL_SIZE;j=j+KERNEL_SIZE) begin
             shift_bram #(
                 .RAM_WIDTH(`OUTPUT_DSP_WIDTH),
-                .RAM_DEPTH(FM_SIZE-KERNEL_SIZE)
+                .RAM_DEPTH((FM_SIZE + 2*PADDING)-KERNEL_SIZE)
             )ram(
                 .i_clk(i_clk),
                 .i_data(w_outDSP[(`OUTPUT_DSP_WIDTH*j)+((KERNEL_SIZE*`OUTPUT_DSP_WIDTH)-1):`OUTPUT_DSP_WIDTH*j+(KERNEL_SIZE-1)*`OUTPUT_DSP_WIDTH]),
@@ -107,10 +110,10 @@ module PE #(
     end
     endgenerate 
 
-    /*Numero de DSPs = tamanho de pesos num filtro*/
+    /*Numero de DSPs = numero de pesos num filtro*/
     generate
     genvar i;
-        if(KERNEL_SIZE == FM_SIZE) begin
+        if(KERNEL_SIZE == (FM_SIZE + 2*PADDING)) begin
             for(i=0;i<KERNEL_SIZE*KERNEL_SIZE;i=i+1) begin
                 DSP48E2#(
                     .AMULTSEL("AD"), 

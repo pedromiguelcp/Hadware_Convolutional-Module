@@ -22,8 +22,8 @@
 
 module conv_blk_tb #(
   parameter KERNEL_SIZE = 3,
-  parameter FM_SIZE = 10,
-  parameter PADDING = 0,
+  parameter FM_SIZE = 250,
+  parameter PADDING = 2,
   parameter STRIDE = 1,
   parameter MAXPOOL = 0,
   localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
@@ -52,9 +52,9 @@ module conv_blk_tb #(
     .i_clk(i_clk), 
     .i_rst(i_rst), 
     .i_go(i_go),
-    .i_fm_data(i_fm_data),
     .i_weight_en(weight_en),
     .i_weight_data(i_weight_data),
+    .i_fm_data(i_fm_data),
     
     .o_en(w_o_en),
     .o_conv_result(w_o_conv_blk)
@@ -109,7 +109,7 @@ module conv_blk_tb #(
   always #5 i_clk = ~i_clk;
   
   always @(posedge i_clk) begin
-    if(i_go == 1 && (i < FM_SIZE*FM_SIZE)) begin
+    if(i_go == 1 && (i < FM_SIZE**2)) begin
       i_fm_data <= FM_data[i+1];
       i <= i+1;
     end
@@ -118,7 +118,7 @@ module conv_blk_tb #(
   always@(posedge i_clk) begin
     if(w_o_en) begin
       $fwrite(out_data,"%0d\n", (w_o_conv_blk));  
-      $display("%0d\n", w_o_conv_blk); 
+      //$display("%0d\n", w_o_conv_blk); 
       out_cnt <= out_cnt + 1; 
     end 
   end

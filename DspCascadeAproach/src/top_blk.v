@@ -21,13 +21,15 @@
 `include "global.v"
 
 module top_blk#(
-  parameter KERNEL_SIZE = `KERNEL_SIZE,
-  parameter FM_SIZE = `FM_SIZE,
-  parameter PADDING = `PADDING,
-  parameter STRIDE = `STRIDE,
-  parameter MAXPOOL = `MAXPOOL,
-  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
-)(
+    parameter  KERNEL_SIZE = `KERNEL_SIZE,
+    parameter  FM_SIZE     = `FM_SIZE,
+    parameter  PADDING     = `PADDING,
+    parameter  STRIDE      = `STRIDE,
+    parameter  MAXPOOL     = `MAXPOOL,
+    parameter  IN_FM_CH    = `IN_FM_CH,
+    parameter  OUT_FM_CH   = `OUT_FM_CH,
+    localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
+    )(
     input wire i_clk,
     input wire i_rst,
     input wire i_go,

@@ -16,5 +16,7 @@
 `define STRIDE              1
 //usar maxpool quando saida par
 `define MAXPOOL             0
+`define IN_FM_CH            0
+`define OUT_FM_CH           0
 
 `endif

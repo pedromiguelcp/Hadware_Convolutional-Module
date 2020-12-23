@@ -21,38 +21,38 @@
 `include "global.v"
 
 module conv_blk#(
-  parameter KERNEL_SIZE = `KERNEL_SIZE,
-  parameter FM_SIZE = `FM_SIZE,
-  parameter PADDING = `PADDING,
-  parameter STRIDE = `STRIDE,
-  parameter MAXPOOL = `MAXPOOL,
-  localparam OUT_SIZE = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
+    parameter  KERNEL_SIZE = `KERNEL_SIZE,
+    parameter  FM_SIZE     = `FM_SIZE,
+    parameter  PADDING     = `PADDING,
+    parameter  STRIDE      = `STRIDE,
+    parameter  MAXPOOL     = `MAXPOOL,
+    parameter  IN_FM_CH    = `IN_FM_CH,
+    parameter  OUT_FM_CH   = `OUT_FM_CH,
+    localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
 )(
     input wire i_clk,
     input wire i_rst,
-    input wire i_go, 
-    input wire signed [`A_DSP_WIDTH-1:0] i_fm_data,
-    input wire i_weight_en,
+    input wire i_go,
+    input wire i_weight_en, 
     input wire signed [18-1:0] i_weight_data,
+    input wire signed [`A_DSP_WIDTH-1:0] i_fm_data,
 
-    output reg o_done,
     output reg o_en,
     output reg signed [`DW-1:0] o_conv_result//saida para a bram
 );
 
-    reg signed [`A_DSP_WIDTH-1:0] r_fm_data;    
-    reg signed [KERNEL_SIZE*KERNEL_SIZE*18-1:0] r_weight_data;
-
+    reg signed [`A_DSP_WIDTH-1:0] r_fm_data;   
+    reg signed [`A_DSP_WIDTH-1:0] r_fm_data_save [(FM_SIZE + 2*PADDING)*PADDING*3 - 1:0];    
+    reg signed [KERNEL_SIZE**2*18-1:0] r_weight_data;
     reg signed [`DW-1:0] r_relu_result [(OUT_SIZE / 2) - 1:0];//registo para os resultados que saiem do bloco ReLU e entrar no bloco maxpool
-
+    reg signed [`DW-1:0] r_maxp_result [(OUT_SIZE / 2) - 1:0];
     reg r_en_PE, r_clean_maxp, r_mp_out_rdy;
 
     wire signed [`DW-1:0] r_maxpool_result [(OUT_SIZE / 2) - 1:0];
-    reg signed [`DW-1:0] r_maxp_result [(OUT_SIZE / 2) - 1:0];
     wire signed [`DW-1:0] w_o_data_PE, w_o_data_ReLU;
     wire w_o_PE, w_o_ReLU;
     
-    integer i, ii, j, jj, k, r_o_ReLU_cnt;
+    integer i, ii, j, k, r_in_fm_cnt, r_o_ReLU_cnt, r_fm_row, r_fm_column, r_fm_read_addr, r_fm_write_addr;
 
 
     /***************************************************
@@ -63,26 +63,53 @@ module conv_blk#(
         if(i_rst)begin
             r_fm_data <= 0;
             r_en_PE <= 0;
-            o_done <= 0;
             ii <= 0;
-            jj <= 0;
+            r_fm_row <= 0;
+            r_fm_column <= 0;
+            r_fm_read_addr <= 0;
+            r_fm_write_addr <= 0;
         end
         else if(i_weight_en)begin
             r_weight_data[ii*18 +: 18] <= i_weight_data;
-            //r_weight_data[ii*18 +: 18] <= 1;
             ii <= ii + 1;
         end
-        else if(i_go && !o_done && (r_fm_data < FM_SIZE**2)) begin
-            //feature map que vem do ficheiro
-            r_fm_data <= i_fm_data;
-            //r_fm_data <= jj + 1;
-            //jj <= jj + 1;
+        else if(i_go && (r_fm_row < (FM_SIZE + PADDING*2))) begin
+            
+            if(r_fm_column < (FM_SIZE + PADDING*2 - 1))
+                r_fm_column <= r_fm_column + 1;
+            else begin
+                r_fm_column <= 0;
+                r_fm_row <= r_fm_row + 1;
+            end
+
+            //havendo padding aqui tera de haver o controlo para mandar os 0s para o PE
+            //certamente aqui estara o controlo do addr de leitura da memoria onde estarao os dados de entrada
+            //por isso em certos momento em vez de ler o feature map, manda-se 0 para o PE
+            if(PADDING > 0) begin
+                r_fm_data_save[r_fm_write_addr] <= i_fm_data;
+                if(r_fm_write_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
+                    r_fm_write_addr <= r_fm_write_addr + 1;
+                else
+                    r_fm_write_addr <= 0;
+
+                if((r_fm_row < PADDING || r_fm_row > (FM_SIZE + PADDING*2 - 1 - PADDING) || r_fm_column < PADDING || r_fm_column > (FM_SIZE + PADDING*2 - 1 - PADDING)))begin
+                    r_fm_data <= 0;                     
+                end
+                else begin
+                    r_fm_data <= r_fm_data_save[r_fm_read_addr];
+                    if(r_fm_read_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
+                        r_fm_read_addr <= r_fm_read_addr + 1;
+                    else
+                        r_fm_read_addr <= 0;
+                end
+            end
+            else begin
+                //feature map que vem do ficheiro
+                r_fm_data <= i_fm_data;
+            end
+            
             //novo dado para o PE
             r_en_PE <= 1;
-        end
-        else begin
-            //mais nenhum valor vai ser enviado para o PE
-            o_done <= 1;
         end
     end
 
