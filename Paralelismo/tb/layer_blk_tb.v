@@ -22,11 +22,11 @@
 
 module layer_blk_tb #(
   parameter KERNEL_SIZE     = 3,
-  parameter FM_SIZE         = 252,
-  parameter PADDING         = 0,
-  parameter STRIDE          = 1,
-  parameter MAXPOOL         = 0,
-  parameter DSP_AVAILABLE   = 100,
+  parameter FM_SIZE         = 253,
+  parameter PADDING         = 10,
+  parameter STRIDE          = 2,
+  parameter MAXPOOL         = 1,
+  parameter DSP_AVAILABLE   = 18,
   parameter IN_FM_CH        = 1,
   parameter OUT_FM_CH       = 2,
   
@@ -43,11 +43,16 @@ module layer_blk_tb #(
                                :(ROW_NUM1%KERNEL_SIZE > 0) ? ROW_NUM1 + (KERNEL_SIZE - (ROW_NUM1%KERNEL_SIZE)):ROW_NUM1,  
   localparam integer ROW_NUM = (MAXPOOL == 1 && ROW_NUM2%2 != 0) ? ROW_NUM2 + 1:ROW_NUM2,
   localparam integer PE_NUM = $ceil((FM_size/(ROW_NUM-(KERNEL_size-stride)))),                      //Número de PEs possiveis no FM de entrada
-  localparam integer BRAM_SIZE = (MAXPOOL == 1) ? ((ROW_NUM-(KERNEL_size-stride))/stride)/2:(ROW_NUM-(KERNEL_size-stride))/stride,                             //Tamanho BRAMs dos PEs (exclusão do último)
+  localparam integer BRAM_SIZE = (MAXPOOL == 1) ? ((NUM_PE ==1 ) ? 
+                                 ((ROW_NUM-(KERNEL_size-stride)+2*PADDING)/stride)/2:((ROW_NUM-(KERNEL_size-stride)+PADDING)/stride)/2) 
+                                 :((NUM_PE == 1 ) ? 
+                                 ((ROW_NUM-(KERNEL_size-stride)+2*PADDING)/stride):(ROW_NUM-(KERNEL_size-stride)+PADDING)/stride),                             //Tamanho BRAMs dos PEs (exclusão do último)
+                                 
+  localparam integer MID_BRAM_SIZE = (PADDING > 0 && NUM_PE > 2) ? (ROW_NUM-(KERNEL_size-stride))/stride:BRAM_SIZE,
   localparam integer IN_BRAM_SIZE = (NUM_PE == 1) ? FM_SIZE:ROW_NUM-(KERNEL_size-stride),
   localparam integer LAST_PE_ROW_NUM = FM_SIZE - (PE_NUM-1)*(ROW_NUM-((KERNEL_SIZE-STRIDE))),       //Número de linhas a processar pelo último PE
   localparam integer PE_TO_USE = (LAST_PE_ROW_NUM < KERNEL_SIZE) ? PE_NUM - 1: PE_NUM,              //Número de PEs realmente em uso pelo bloco (tendo em conta restrições definidas)
-  localparam integer LAST_BRAM_SIZE = (MAXPOOL == 1) ? ((LAST_PE_ROW_NUM-(KERNEL_size-stride))/stride)/2:(LAST_PE_ROW_NUM-(KERNEL_size-stride))/stride                 //Tamanho BRAM do último PE 
+  localparam integer LAST_BRAM_SIZE = (MAXPOOL == 1) ? ((LAST_PE_ROW_NUM-(KERNEL_size-stride)+PADDING)/stride)/2:(LAST_PE_ROW_NUM-(KERNEL_size-stride)+PADDING)/stride                 //Tamanho BRAM do último PE 
 
   )();
 
@@ -307,14 +312,16 @@ module layer_blk_tb #(
   
     always @(posedge i_clk) begin
         if(write_file) begin
-        
             if(out_file < PE_TO_USE - 1 || out_file == 0) begin
-                if(output_bram_r_addr < (BRAM_SIZE*OUT_SIZE)+1) begin
+            
+                if(((output_bram_r_addr < (BRAM_SIZE*OUT_SIZE)+1) && out_file == 0) || (((output_bram_r_addr < (MID_BRAM_SIZE*OUT_SIZE)+1) && out_file > 0)) ) begin
                    if(output_bram_r_addr > 0) begin
                         $fwrite(out_data,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*0 +: 48]);    // 0..47, 48..95
                         $fwrite(out_data1,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*1 +: 48]);   //96..143,144..191
                         $fwrite(out_data2,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*2 +: 48]);   //192..240,241..288
                    end
+
+
                     output_bram_r_addr <= output_bram_r_addr + 1;
                 end
                 else begin
@@ -353,7 +360,9 @@ module layer_blk_tb #(
         .MAXPOOL(MAXPOOL),
         .IN_FM_CH(IN_FM_CH),
         .OUT_FM_CH(OUT_FM_CH),
-        .NUM_PE(PE_TO_USE)
+        .NUM_PE(PE_TO_USE),
+        .LAST_PE_ROW_NUM(LAST_PE_ROW_NUM),
+        .ROW_NUM(ROW_NUM)
     ) TOP_layer (
         .i_clk(i_clk), 
         .i_rst(i_rst), 
@@ -410,7 +419,7 @@ module layer_blk_tb #(
                      bram #(
                     .ADDR_WIDTH($clog2(BRAM_SIZE*OUT_SIZE)),
                     .RAM_WIDTH(48),
-                    .RAM_DEPTH(BRAM_SIZE*OUT_SIZE),
+                    .RAM_DEPTH((out_BRAM > 0) ? MID_BRAM_SIZE*OUT_SIZE:BRAM_SIZE*OUT_SIZE),
                     .RAM_PORTS(1)
                     )outfeaturemap(
                     .i_clk(i_clk), 

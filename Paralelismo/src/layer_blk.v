@@ -28,7 +28,9 @@ module layer_blk#(
     parameter  MAXPOOL     = `MAXPOOL,
     parameter  IN_FM_CH    = `IN_FM_CH,
     parameter  OUT_FM_CH   = `OUT_FM_CH,
-    parameter  NUM_PE      = `NUM_PE
+    parameter  NUM_PE      = `NUM_PE,
+    parameter  LAST_PE_ROW_NUM = 0,
+    parameter  ROW_NUM     = 0
 )(
     input wire i_clk,
     input wire i_rst,
@@ -55,7 +57,9 @@ module layer_blk#(
                 .PADDING(PADDING),
                 .STRIDE(STRIDE),
                 .MAXPOOL(MAXPOOL),
-                .NUM_PE(NUM_PE)
+                .NUM_PE(NUM_PE),
+                .ROW_NUM(ROW_NUM),
+                .LAST_PE_ROW_NUM(LAST_PE_ROW_NUM)
               )convolutional_block1(
                 .i_clk(i_clk), 
                 .i_rst(i_rst), 

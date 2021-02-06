@@ -29,7 +29,10 @@ module conv_blk#(
     parameter  IN_FM_CH    = `IN_FM_CH,
     parameter  OUT_FM_CH   = `OUT_FM_CH,
     parameter  NUM_PE      = `NUM_PE,
-    localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1
+    parameter  ROW_NUM     = 0,
+    parameter  LAST_PE_ROW_NUM = 0,
+    localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1,
+    localparam PE_ROW_NUM = (NUM_PE == 1) ? ROW_NUM+PADDING:LAST_PE_ROW_NUM
 )(
     input wire i_clk,
     input wire i_rst,
@@ -43,7 +46,7 @@ module conv_blk#(
 );
 
     reg signed [(`A_DSP_WIDTH*NUM_PE)-1:0]         r_fm_data;   
-    reg signed [(`A_DSP_WIDTH*NUM_PE)-1:0]         r_fm_data_save [(FM_SIZE + 2*PADDING)*PADDING*3 - 1:0];    
+    reg signed [`A_DSP_WIDTH-1:0]         r_fm_data_save [(FM_SIZE + 2*PADDING)*PADDING*3*NUM_PE - 1:0];    
     reg signed [(KERNEL_SIZE**2*`B_DSP_WIDTH)-1:0]    r_weight_data;
     reg signed [`DW-1:0]                    r_relu_result [(OUT_SIZE / 2)*NUM_PE - 1:0];//registo para os resultados que saiem do bloco ReLU e entrar no bloco maxpool
     reg signed [`DW-1:0]                    r_maxp_result [(OUT_SIZE / 2)*NUM_PE - 1:0];
@@ -53,7 +56,7 @@ module conv_blk#(
     wire signed [(`DW*NUM_PE)-1:0]     w_o_data_PE, w_o_data_ReLU;
     wire w_o_PE, w_o_ReLU;
     
-    integer i, ii, j, k, r_in_fm_cnt, r_o_ReLU_cnt, r_fm_row, r_fm_column, r_fm_read_addr, r_fm_write_addr, max_PE;
+    integer i, ii, j, k, r_in_fm_cnt, r_o_ReLU_cnt, r_fm_row, r_fm_column, r_firstfm_read_addr, r_fm_read_addr, r_fm_write_addr, max_PE, padding_PE;
 
 
     /***************************************************
@@ -69,6 +72,7 @@ module conv_blk#(
             r_fm_column <= 0;
             r_fm_read_addr <= 0;
             r_fm_write_addr <= 0;
+            r_firstfm_read_addr <= 0;
         end
         else if(i_weight_en)begin
             r_weight_data[ii*18 +: 18] <= i_weight_data;
@@ -87,22 +91,51 @@ module conv_blk#(
             //certamente aqui estara o controlo do addr de leitura da memoria onde estarao os dados de entrada
             //por isso em certos momento em vez de ler o feature map, manda-se 0 para o PE
             if(PADDING > 0) begin
-                r_fm_data_save[r_fm_write_addr] <= i_fm_data;
+                for(padding_PE = 0; padding_PE < NUM_PE; padding_PE = padding_PE + 1) begin
+                    r_fm_data_save[r_fm_write_addr+(FM_SIZE + 2*PADDING)*PADDING*3*padding_PE] <= i_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH];
+                    
+                    
+
+//                    if((r_fm_row < PADDING || r_fm_row > (FM_SIZE + PADDING*2 - 1 - PADDING) || r_fm_column < PADDING || r_fm_column > (FM_SIZE + PADDING*2 - 1 - PADDING)))begin
+//                        r_fm_data <= 0;                     
+//                    end
+
+                    if( padding_PE == 0 && r_fm_row < PADDING)begin
+                        r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= 0;                    
+                    end
+                    else if( padding_PE == (NUM_PE - 1) && (r_fm_row > PE_ROW_NUM - 1) )begin
+                        r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= 0;                    
+                    end
+                    else if( r_fm_column < PADDING || r_fm_column > (FM_SIZE + PADDING*2 - 1 - PADDING))begin
+                        r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= 0;                      
+                    end
+                    else begin
+                        
+                        if(padding_PE == 0) begin
+                            r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= r_fm_data_save[r_firstfm_read_addr+(FM_SIZE + 2*PADDING)*PADDING*3*padding_PE];
+                            if(r_firstfm_read_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
+                                r_firstfm_read_addr <= r_firstfm_read_addr + 1;
+                            else
+                                r_firstfm_read_addr <= 0;
+                        end
+                        else begin
+                             r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= r_fm_data_save[r_fm_read_addr+(FM_SIZE + 2*PADDING)*PADDING*3*padding_PE];
+                            if(r_fm_read_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
+                                r_fm_read_addr <= r_fm_read_addr + 1;
+                            else
+                                r_fm_read_addr <= 0;                       
+                        
+                        end
+                    end
+                end
+                
+                
                 if(r_fm_write_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
                     r_fm_write_addr <= r_fm_write_addr + 1;
                 else
                     r_fm_write_addr <= 0;
+                
 
-                if((r_fm_row < PADDING || r_fm_row > (FM_SIZE + PADDING*2 - 1 - PADDING) || r_fm_column < PADDING || r_fm_column > (FM_SIZE + PADDING*2 - 1 - PADDING)))begin
-                    r_fm_data <= 0;                     
-                end
-                else begin
-                    r_fm_data <= r_fm_data_save[r_fm_read_addr];
-                    if(r_fm_read_addr < (FM_SIZE + 2*PADDING)*PADDING*3 - 1)
-                        r_fm_read_addr <= r_fm_read_addr + 1;
-                    else
-                        r_fm_read_addr <= 0;
-                end
             end
             else begin
                 //feature map que vem do ficheiro
@@ -214,7 +247,7 @@ module conv_blk#(
         for(PE_num = 0; PE_num < NUM_PE; PE_num = PE_num + 1) begin
             PE #(
                 .KERNEL_SIZE(KERNEL_SIZE),
-                .FM_SIZE(FM_SIZE),
+                .FM_SIZE(FM_SIZE+2*PADDING),
                 .PADDING(PADDING),
                 .STRIDE(STRIDE)
             )uut(
