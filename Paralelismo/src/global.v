@@ -11,14 +11,13 @@
 
 
 `define KERNEL_SIZE         3
-`define FM_SIZE             10
+`define FM_SIZE             252
 `define PADDING             0
 `define STRIDE              1
-//usar maxpool quando saida par
 `define MAXPOOL             1
-`define IN_FM_CH            1
-`define OUT_FM_CH           1
-`define NUM_PE              2
+`define IN_FM_CH            384
+`define OUT_FM_CH           12
+`define DSP_AVAILABLE       108
 
 
 `endif

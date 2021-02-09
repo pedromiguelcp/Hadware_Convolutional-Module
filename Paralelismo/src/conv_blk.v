@@ -28,7 +28,7 @@ module conv_blk#(
     parameter  MAXPOOL     = `MAXPOOL,
     parameter  IN_FM_CH    = `IN_FM_CH,
     parameter  OUT_FM_CH   = `OUT_FM_CH,
-    parameter  NUM_PE      = `NUM_PE,
+    parameter  NUM_PE      = `DSP_AVAILABLE,
     parameter  ROW_NUM     = 0,
     parameter  LAST_PE_ROW_NUM = 0,
     localparam OUT_SIZE    = ((FM_SIZE - KERNEL_SIZE + 2 * PADDING) / STRIDE) + 1,
@@ -54,7 +54,8 @@ module conv_blk#(
 
     wire signed [`DW-1:0]               r_maxpool_result [(OUT_SIZE / 2)*NUM_PE - 1:0];
     wire signed [(`DW*NUM_PE)-1:0]     w_o_data_PE, w_o_data_ReLU;
-    wire w_o_PE, w_o_ReLU;
+    wire [NUM_PE-1:0] w_o_PE;
+    wire [NUM_PE-1:0] w_o_ReLU;
     
     integer i, ii, j, k, r_in_fm_cnt, r_o_ReLU_cnt, r_fm_row, r_fm_column, r_firstfm_read_addr, r_fm_read_addr, r_fm_write_addr, max_PE, padding_PE;
 
@@ -155,7 +156,7 @@ module conv_blk#(
         if(i_rst) begin
             r_o_ReLU_cnt <= 1;
         end  
-        else if(w_o_ReLU) begin
+        else if(w_o_ReLU[0]) begin
             r_o_ReLU_cnt <= r_o_ReLU_cnt + 1;         
         end
     end
@@ -174,7 +175,7 @@ module conv_blk#(
                 r_relu_result[i] <= 0;
             end
         end
-        else if(w_o_ReLU && MAXPOOL) begin
+        else if(w_o_ReLU[0] && MAXPOOL) begin
             for(i = 0; i < NUM_PE; i = i + 1) begin
                 r_relu_result[(((r_o_ReLU_cnt-1)/2) 
                         - (((r_o_ReLU_cnt-1) / OUT_SIZE) * (OUT_SIZE / 2)))+i*(OUT_SIZE/2)] <= w_o_data_ReLU[i*`DW+:`DW];
@@ -203,7 +204,7 @@ module conv_blk#(
             //quantidade de resultados que saem dos blocos maxpool
             k <= OUT_SIZE / 2;
         end
-        else if(w_o_ReLU && (MAXPOOL == 0)) begin
+        else if(w_o_ReLU[0] && (MAXPOOL == 0)) begin
             //se nao houver maxpool, saida = saida do bloco ReLU
             o_en <= 1;
             o_conv_result <= w_o_data_ReLU;
@@ -257,16 +258,16 @@ module conv_blk#(
                 .i_Weight(r_weight_data),
                 .i_en(r_en_PE),
         
-                .o_en(w_o_PE),
+                .o_en(w_o_PE[PE_num]),
                 .o_P(w_o_data_PE[PE_num*`DW + (`DW-1):PE_num*`DW])
             );
             
             relu uut1(
                 .i_clk(i_clk), 
                 .i_data(w_o_data_PE[PE_num*`DW + (`DW-1):PE_num*`DW]),
-                .i_en(w_o_PE), 
+                .i_en(w_o_PE[PE_num]), 
         
-                .o_en(w_o_ReLU),
+                .o_en(w_o_ReLU[PE_num]),
                 .o_data(w_o_data_ReLU[PE_num*`DW + (`DW-1):PE_num*`DW])
             );
             
