@@ -93,13 +93,7 @@ module conv_blk#(
             //por isso em certos momento em vez de ler o feature map, manda-se 0 para o PE
             if(PADDING > 0) begin
                 for(padding_PE = 0; padding_PE < NUM_PE; padding_PE = padding_PE + 1) begin
-                    r_fm_data_save[r_fm_write_addr+(FM_SIZE + 2*PADDING)*PADDING*3*padding_PE] <= i_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH];
-                    
-                    
-
-//                    if((r_fm_row < PADDING || r_fm_row > (FM_SIZE + PADDING*2 - 1 - PADDING) || r_fm_column < PADDING || r_fm_column > (FM_SIZE + PADDING*2 - 1 - PADDING)))begin
-//                        r_fm_data <= 0;                     
-//                    end
+                    r_fm_data_save[r_fm_write_addr+(FM_SIZE + 2*PADDING)*PADDING*3*padding_PE] <= i_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH];                  
 
                     if( padding_PE == 0 && r_fm_row < PADDING)begin
                         r_fm_data[`A_DSP_WIDTH*padding_PE+:`A_DSP_WIDTH] <= 0;                    

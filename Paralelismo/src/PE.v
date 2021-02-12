@@ -29,25 +29,30 @@ module PE #(
 )(
     input wire i_clk,
     input wire i_rst,
-    input wire signed [`A_DSP_WIDTH-1:0] i_DataFM, 
-    input wire signed [(KERNEL_SIZE*KERNEL_SIZE*`B_DSP_WIDTH)-1:0] i_Weight,
-    input wire i_en, 
+    (* DONT_TOUCH = "TRUE" *)input wire signed [`A_DSP_WIDTH-1:0] i_DataFM, 
+    (* DONT_TOUCH = "TRUE" *)input wire signed [(KERNEL_SIZE*KERNEL_SIZE*`B_DSP_WIDTH)-1:0] i_Weight,
+    (* DONT_TOUCH = "TRUE" *)input wire i_en, 
 
-    output reg o_en, //sinal para dizer quando tem saída válida
-    output reg signed [`OUTPUT_DSP_WIDTH-1:0] o_P
+    (* DONT_TOUCH = "TRUE" *)output reg o_en, //sinal para dizer quando tem saída válida
+    (* DONT_TOUCH = "TRUE" *)output reg signed [`OUTPUT_DSP_WIDTH-1:0] o_P
     );
     
     reg [31:0] r_out_cnt;//contar até KERNEL_SIZE*FM_SIZE + 1b para o sinal  
     reg r_cnt;
     integer int_conv_cnt;
-    
+
     //saída de cada DSP
-    wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
+    (* DONT_TOUCH = "TRUE" *) wire [(KERNEL_SIZE*KERNEL_SIZE*48) - 1:0] w_outDSP;
 
     //saída das shift rams -> quantidade = tamanho kernel
-    wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
+   (* DONT_TOUCH = "TRUE" *) wire [(KERNEL_SIZE*48) - 1:0] w_outRAM;
      
-
+   (* DONT_TOUCH = "TRUE" *) wire signed [(KERNEL_SIZE*KERNEL_SIZE*`B_DSP_WIDTH)-1:0] w_test_Weight;
+   (* DONT_TOUCH = "TRUE" *) wire signed [`A_DSP_WIDTH-1:0] w_test_DataFM;
+   
+//   assign w_test_Weight = 162'd4722366482869645213696;
+   assign w_test_Weight = i_Weight;
+   assign w_test_DataFM = i_DataFM;
     /*Saida = ultima posicao do w_outRAM 
     a menos que KERNEL_SIZE == FM_SIZE pois nao sao usadas shiftrams*/
     always @(*) begin
@@ -183,8 +188,9 @@ module PE #(
                     .INMODE(5'd0), // A * B
                     .OPMODE(9'b000110101), // (A * B) + C
                     //.RSTINMODE(RSTINMODE), 
-                    .A(i_DataFM), 
-                    .B(i_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                    .A(w_test_DataFM), 
+//                    .B(w_test_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                    .B(w_test_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
                     .C((i>0) ? w_outDSP[(`OUTPUT_DSP_WIDTH*i)-1:(`OUTPUT_DSP_WIDTH*i)-`OUTPUT_DSP_WIDTH]: 0),  
                     .CARRYIN(1'd0), 
                     //.D(D),
@@ -285,8 +291,9 @@ module PE #(
                 .INMODE(5'd0), 
                 .OPMODE(9'b000110101), 
                 //.RSTINMODE(RSTINMODE), 
-                .A(i_DataFM), 
-                .B(i_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                .A(w_test_DataFM), 
+//                .B(w_test_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
+                .B(w_test_Weight[(`B_DSP_WIDTH*i)+(`B_DSP_WIDTH-1):`B_DSP_WIDTH*i]),
                 .C((i>0 & i%KERNEL_SIZE!=0) ? w_outDSP[(`OUTPUT_DSP_WIDTH*i)-1:(`OUTPUT_DSP_WIDTH*i)-`OUTPUT_DSP_WIDTH]:  (i!=0) ? 
                                               w_outRAM[`OUTPUT_DSP_WIDTH*(i/KERNEL_SIZE)-1:`OUTPUT_DSP_WIDTH*(i/KERNEL_SIZE)-`OUTPUT_DSP_WIDTH] :   0),  
                 .CARRYIN(1'd0), 

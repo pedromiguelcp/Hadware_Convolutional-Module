@@ -47,7 +47,10 @@ module conv_blk_tb #(
     .FM_SIZE(FM_SIZE),
     .PADDING(PADDING),
     .STRIDE(STRIDE),
-    .MAXPOOL(MAXPOOL)
+    .MAXPOOL(MAXPOOL),
+    .NUM_PE(1),
+    .ROW_NUM(252),
+    .LAST_PE_ROW_NUM(2)
   )convolutional_block(
     .i_clk(i_clk), 
     .i_rst(i_rst), 

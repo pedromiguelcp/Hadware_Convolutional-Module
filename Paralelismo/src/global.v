@@ -14,10 +14,10 @@
 `define FM_SIZE             252
 `define PADDING             0
 `define STRIDE              1
-`define MAXPOOL             1
-`define IN_FM_CH            384
-`define OUT_FM_CH           12
-`define DSP_AVAILABLE       108
+`define MAXPOOL             0
+`define IN_FM_CH            1
+`define OUT_FM_CH           1
+`define DSP_AVAILABLE       9
 
 
 `endif
