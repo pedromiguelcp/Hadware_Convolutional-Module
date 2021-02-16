@@ -26,13 +26,15 @@ module layer_blk_tb #(
   parameter PADDING         = 0,
   parameter STRIDE          = 1,
   parameter MAXPOOL         = 0,
-  parameter DSP_AVAILABLE   = 36,
-  parameter IN_FM_CH        = 1,
+  parameter DSP_AVAILABLE   = 9,
+  parameter IN_FM_CH        = 3,
   parameter OUT_FM_CH       = 2,
   
   /* localparam real usados para arredondamentos dos valores nas eqs. abaixo */
   
-  localparam NUM_PE = (DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH,
+  localparam NUM_PE = ((DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH == 0) ? (DSP_AVAILABLE/(KERNEL_SIZE**2)):(DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH,
+  localparam NUM_PARALLEL_FILTER = ((DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH == 0) ? 1:OUT_FM_CH,
+  localparam NUM_ITERATIONS = (OUT_FM_CH - NUM_PARALLEL_FILTER + 1),
   localparam real FM_size = FM_SIZE,
   localparam real KERNEL_size = KERNEL_SIZE,
   localparam real stride = STRIDE,
@@ -57,18 +59,18 @@ module layer_blk_tb #(
   localparam integer LAST_IN_BRAM_SIZE = (PE_TO_USE == 1) ? FM_SIZE: (LAST_PE_ROW_NUM == ROW_NUM) ?
                         (KERNEL_size-stride):ROW_NUM-(KERNEL_size-stride),
   localparam integer LAST_BRAM_SIZE = (MAXPOOL == 1) ? ((LAST_PE_ROW_NUM-(KERNEL_size-stride)+PADDING)/stride)/2:(LAST_PE_ROW_NUM-(KERNEL_size-stride)+PADDING)/stride,                //Tamanho BRAM do último PE 
-  localparam integer BRAM_NUM = (LAST_PE_ROW_NUM == ROW_NUM) ? PE_TO_USE + 1:PE_TO_USE
+  localparam integer BRAM_NUM = (PE_TO_USE == 1) ? PE_TO_USE: (LAST_PE_ROW_NUM == ROW_NUM) ? PE_TO_USE + 1:PE_TO_USE
 
 
   )();
 
 
   reg i_clk, i_rst;
-  wire signed [(48*PE_TO_USE*OUT_FM_CH)-1:0] w_o_conv_blk;
+  wire signed [(48*PE_TO_USE*NUM_PARALLEL_FILTER)-1:0] w_o_conv_blk; //
 
   /*Dados lidos dos ficheiros*/
   reg signed [30-1:0] FM_data [0:(FM_SIZE**2)*IN_FM_CH-1];
-  reg signed [18-1:0] KERNEL_data [0:(KERNEL_SIZE**2*OUT_FM_CH)-1];
+  reg signed [18-1:0] KERNEL_data [0:(KERNEL_SIZE**2*OUT_FM_CH*IN_FM_CH)-1];
   
   /*Controlo escrita nas brams*/
     /*weight bram*/
@@ -92,13 +94,13 @@ module layer_blk_tb #(
 //  wire signed [(48*PE_TO_USE*OUT_FM_CH*IN_FM_CH)-1:0] output_bram_o_data;
   
   wire signed [(48*PE_TO_USE*OUT_FM_CH)-1:0] output_bram_o_data;
-  wire  output_bram_w_en;
-  wire  output_last_bram_w_en;  
+  wire  [NUM_ITERATIONS-1:0] output_bram_w_en;
+  wire  [NUM_ITERATIONS-1:0] output_last_bram_w_en;  
   wire o_done;
   
   integer out_data, out_data1, out_data2, out_data3, out_data4, out_data5;
   integer out_file;
-  integer out_PE, in_PE, in_FM, weight_bram;
+  integer out_PE, in_PE, in_FM, weight_bram, weight_bram1;
   
   
   reg r_done;
@@ -147,14 +149,14 @@ module layer_blk_tb #(
   Escrita do filtro e fmp nas brams
   ***************************************************/
   always@(posedge i_clk) begin
-    if(weight_bram_addr_cnt < KERNEL_SIZE**2)begin
+    if(weight_bram_addr_cnt < KERNEL_SIZE**2*IN_FM_CH)begin
       if(weight_bram_w_en)//delay por causa do addr de escrita
         weight_bram_w_addr <= weight_bram_w_addr + 1;
       else
         weight_bram_w_addr <= 0;
         
       for(weight_bram = 0; weight_bram < OUT_FM_CH; weight_bram = weight_bram +1) begin  
-        weight_bram_i_data[weight_bram*18 +:18] <= KERNEL_data[weight_bram*KERNEL_SIZE**2 + weight_bram_addr_cnt];   
+        weight_bram_i_data[weight_bram*18 +:18] <= KERNEL_data[weight_bram*KERNEL_SIZE**2*IN_FM_CH + weight_bram_addr_cnt];   
       end
       
       weight_bram_addr_cnt <= weight_bram_addr_cnt + 1;
@@ -252,7 +254,7 @@ module layer_blk_tb #(
         .i_weight_data(weight_bram_o_data),
         .i_fm_data(fm_bram_o_data),
         .i_outfm_data(output_bram_o_data),
-
+//        .i_outfm_data(0),        
         .o_conv_result(w_o_conv_blk),    
         .o_fm_bram_r_addr(fm_bram_r_addr),
         .o_output_bram_w_en(output_bram_w_en),
@@ -265,12 +267,12 @@ module layer_blk_tb #(
 
     
     generate 
-    genvar PE_num, FM_num;
+    genvar PE_num, FM_num, Weight_bram;
     
     if(LAST_PE_ROW_NUM == ROW_NUM) begin
     for(FM_num = 0; FM_num < IN_FM_CH; FM_num = FM_num +1) begin
-        for(PE_num = 0; PE_num <= PE_TO_USE; PE_num = PE_num + 1) begin
-            if(PE_num < PE_TO_USE || PE_num == 0) begin
+        for(PE_num = 0; PE_num < BRAM_NUM; PE_num = PE_num + 1) begin
+            if(PE_num < BRAM_NUM || PE_num == 0) begin
         
               bram #(
                 .ADDR_WIDTH($clog2(IN_BRAM_SIZE*FM_SIZE)),
@@ -309,7 +311,7 @@ module layer_blk_tb #(
     end
     else begin
     for(FM_num = 0; FM_num < IN_FM_CH; FM_num = FM_num +1) begin
-        for(PE_num = 0; PE_num < PE_TO_USE; PE_num = PE_num + 1) begin
+        for(PE_num = 0; PE_num < BRAM_NUM; PE_num = PE_num + 1) begin
                 bram #(
                     .ADDR_WIDTH($clog2(IN_BRAM_SIZE*FM_SIZE)),
                     .RAM_WIDTH(30),
@@ -326,75 +328,25 @@ module layer_blk_tb #(
                   ); 
         end
     end    
+    end
     
-    
+    for(Weight_bram = 0; Weight_bram < OUT_FM_CH; Weight_bram = Weight_bram + 1) begin
+          bram #(
+            .ADDR_WIDTH($clog2(KERNEL_SIZE**2*IN_FM_CH)),
+            .RAM_WIDTH(18),
+            .RAM_DEPTH(KERNEL_SIZE**2*IN_FM_CH),
+            .RAM_PORTS(1)
+          )weights(
+            .i_clk(i_clk), 
+            .i_r_addrs(weight_bram_r_addr), 
+            .i_w_addrs(weight_bram_w_addr),
+            .i_wr_en(weight_bram_w_en),
+            .i_data(weight_bram_i_data[Weight_bram*18+17:Weight_bram*18]),
+        
+            .o_data(weight_bram_o_data[Weight_bram*18+17:Weight_bram*18])
+          );
     end
     endgenerate 
- 
-    
-//    generate 
-//    genvar out_BRAM, out_FM, in_CH;
-    
-//    for(in_CH = 0; in_CH < IN_FM_CH; in_CH = in_CH + 1) begin
-//        for(out_FM = 0; out_FM < OUT_FM_CH; out_FM = out_FM + 1) begin
-//            for(out_BRAM = 0; out_BRAM < PE_TO_USE; out_BRAM = out_BRAM +1) begin      
-//                if(out_BRAM < PE_TO_USE - 1 || out_BRAM == 0) begin
-//                     bram #(
-//                    .ADDR_WIDTH($clog2(BRAM_SIZE*OUT_SIZE)),
-//                    .RAM_WIDTH(48),
-//                    .RAM_DEPTH((out_BRAM > 0) ? MID_BRAM_SIZE*OUT_SIZE:BRAM_SIZE*OUT_SIZE),
-//                    .RAM_PORTS(1)
-//                    )outfeaturemap(
-//                    .i_clk(i_clk), 
-//                    .i_r_addrs(w_output_bram_r_addr), 
-//                    .i_w_addrs(output_bram_w_addr),
-//                    .i_wr_en(output_bram_w_en[in_CH]),
-//                    .i_data(w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
-                    
-//                    .o_data(output_bram_o_data[(in_CH*OUT_FM_CH*PE_TO_USE+out_FM*PE_TO_USE+out_BRAM)*48+47:(in_CH*OUT_FM_CH*PE_TO_USE+out_FM*PE_TO_USE+out_BRAM)*48])
-//                    );
-                
-//                end
-//                else begin
-//                    bram #(
-//                    .ADDR_WIDTH($clog2(LAST_BRAM_SIZE*OUT_SIZE)),
-//                    .RAM_WIDTH(48),
-//                    .RAM_DEPTH(LAST_BRAM_SIZE*OUT_SIZE),
-//                    .RAM_PORTS(1)
-//                    )outfeaturemap(
-//                    .i_clk(i_clk), 
-//                    .i_r_addrs(w_output_bram_r_addr), 
-//                    .i_w_addrs(output_bram_w_addr),
-//                    .i_wr_en(output_last_bram_w_en[in_CH]),
-//                    .i_data(w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
-                    
-//                    .o_data(output_bram_o_data[(in_CH*OUT_FM_CH*PE_TO_USE+out_FM*PE_TO_USE+out_BRAM)*48+47:(in_CH*OUT_FM_CH*PE_TO_USE+out_FM*PE_TO_USE+out_BRAM)*48])
-//                    );
-                
-//                end
-            
-//            end
-            
-
-//        end 
-//    end   
-//    for(out_FM = 0; out_FM < OUT_FM_CH; out_FM = out_FM + 1) begin
-//          bram #(
-//            .ADDR_WIDTH($clog2(KERNEL_SIZE**2) + 1),
-//            .RAM_WIDTH(18),
-//            .RAM_DEPTH(KERNEL_SIZE**2),
-//            .RAM_PORTS(1)
-//          )weights(
-//            .i_clk(i_clk), 
-//            .i_r_addrs(weight_bram_r_addr), 
-//            .i_w_addrs(weight_bram_w_addr),
-//            .i_wr_en(weight_bram_w_en),
-//            .i_data(weight_bram_i_data[out_FM*18+17:out_FM*18]),
-        
-//            .o_data(weight_bram_o_data[out_FM*18+17:out_FM*18])
-//          );
-//    end
-//    endgenerate
 
     generate 
     genvar out_BRAM, out_FM;
@@ -410,13 +362,14 @@ module layer_blk_tb #(
                 )outfeaturemap(
                 .i_clk(i_clk), 
                 .i_r_addrs(w_output_bram_r_addr), 
+//                .i_r_addrs(output_bram_r_addr),
                 .i_w_addrs(output_bram_w_addr),
-                .i_wr_en(output_bram_w_en),
-                .i_data(w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
+                .i_wr_en((NUM_PARALLEL_FILTER == 1) ? output_bram_w_en[out_FM]:output_bram_w_en[0]),
+                .i_data((NUM_PARALLEL_FILTER == 1) ? w_o_conv_blk[out_BRAM*48+47:(out_BRAM)*48]:w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
                 
                 .o_data(output_bram_o_data[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48])
                 );
-            
+     
             end
             else begin
                 bram #(
@@ -427,9 +380,10 @@ module layer_blk_tb #(
                 )outfeaturemap(
                 .i_clk(i_clk), 
                 .i_r_addrs(w_output_bram_r_addr), 
+//                .i_r_addrs(output_bram_r_addr),
                 .i_w_addrs(output_bram_w_addr),
-                .i_wr_en(output_last_bram_w_en),
-                .i_data(w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
+                .i_wr_en((NUM_PARALLEL_FILTER == 1) ? output_last_bram_w_en[out_FM]:output_last_bram_w_en[0]),
+                .i_data((NUM_PARALLEL_FILTER == 1) ? w_o_conv_blk[out_BRAM*48+47:(out_BRAM)*48]:w_o_conv_blk[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48]),
                 
                 .o_data(output_bram_o_data[(out_FM*PE_TO_USE+out_BRAM)*48+47:(out_FM*PE_TO_USE+out_BRAM)*48])
                 );
@@ -441,22 +395,7 @@ module layer_blk_tb #(
 
     end 
  
-    for(out_FM = 0; out_FM < OUT_FM_CH; out_FM = out_FM + 1) begin
-          bram #(
-            .ADDR_WIDTH($clog2(KERNEL_SIZE**2) + 1),
-            .RAM_WIDTH(18),
-            .RAM_DEPTH(KERNEL_SIZE**2),
-            .RAM_PORTS(1)
-          )weights(
-            .i_clk(i_clk), 
-            .i_r_addrs(weight_bram_r_addr), 
-            .i_w_addrs(weight_bram_w_addr),
-            .i_wr_en(weight_bram_w_en),
-            .i_data(weight_bram_i_data[out_FM*18+17:out_FM*18]),
-        
-            .o_data(weight_bram_o_data[out_FM*18+17:out_FM*18])
-          );
-    end
+
     endgenerate
 
 endmodule

@@ -23,13 +23,13 @@
 module selector #( 
     parameter WIDTH = 30,
     parameter IN_CH = 3,
-    parameter PE_NUM = 2
+    parameter OUT_NUM = 2
 )(
-    input [(IN_CH*PE_NUM*WIDTH)-1:0] i_data,
+    input [(IN_CH*OUT_NUM*WIDTH)-1:0] i_data,
     input [$clog2(IN_CH):0] i_ch_sel,
-    output [(WIDTH*PE_NUM)-1:0] out
+    output [(WIDTH*OUT_NUM)-1:0] out
     );
 
-    assign out = i_data[PE_NUM*i_ch_sel*WIDTH+:PE_NUM*WIDTH];
+    assign out = i_data[OUT_NUM*i_ch_sel*WIDTH+:OUT_NUM*WIDTH];
 
 endmodule
