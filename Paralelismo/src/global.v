@@ -18,6 +18,8 @@
 `define IN_FM_CH            1
 `define OUT_FM_CH           1
 `define DSP_AVAILABLE       9
+`define BRAM_AVAILABLE      3
 
+`define BRAM_MEMORY_BIT     1000000
 
 `endif

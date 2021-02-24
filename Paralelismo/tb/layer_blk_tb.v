@@ -27,18 +27,24 @@ module layer_blk_tb #(
   parameter STRIDE          = 1,
   parameter MAXPOOL         = 0,
   parameter DSP_AVAILABLE   = 9,
-  parameter IN_FM_CH        = 3,
-  parameter OUT_FM_CH       = 2,
+  parameter IN_FM_CH        = 1,
+  parameter OUT_FM_CH       = 1,
+  parameter BRAM_AVAILABLE  = 3,
   
   /* localparam real usados para arredondamentos dos valores nas eqs. abaixo */
   
-  localparam NUM_PE = ((DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH == 0) ? (DSP_AVAILABLE/(KERNEL_SIZE**2)):(DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH,
-  localparam NUM_PARALLEL_FILTER = ((DSP_AVAILABLE/(KERNEL_SIZE**2))/OUT_FM_CH == 0) ? 1:OUT_FM_CH,
-  localparam NUM_ITERATIONS = (OUT_FM_CH - NUM_PARALLEL_FILTER + 1),
   localparam real FM_size = FM_SIZE,
   localparam real KERNEL_size = KERNEL_SIZE,
   localparam real stride = STRIDE,
+  localparam real out_fm_ch1 = OUT_FM_CH,
   localparam integer OUT_SIZE = (MAXPOOL == 1) ? (((FM_size - KERNEL_size + 2 * PADDING) / stride) + 1)/2:((FM_size - KERNEL_size + 2 * PADDING) / stride) + 1,             //calculo do tamanho do FM de saída
+  parameter integer MEMORY_AVAILABLE = BRAM_AVAILABLE*1000000,
+  parameter integer MEMORY_EACH_FILTER = OUT_SIZE**2*`DW,
+  parameter integer NUM_PARALLEL_FILTER = (MEMORY_AVAILABLE/MEMORY_EACH_FILTER > OUT_FM_CH) ? OUT_FM_CH:MEMORY_AVAILABLE/MEMORY_EACH_FILTER,
+  parameter integer NUM_PE = (DSP_AVAILABLE/(NUM_PARALLEL_FILTER*KERNEL_SIZE**2) == 0) ? (DSP_AVAILABLE/(KERNEL_SIZE**2)):DSP_AVAILABLE/(NUM_PARALLEL_FILTER*KERNEL_SIZE**2),
+  parameter integer NUM_ITERATIONS = $ceil(out_fm_ch1/NUM_PARALLEL_FILTER),
+  parameter integer NUM_FILTER_LAST_IT = (OUT_FM_CH - (NUM_ITERATIONS-1)*NUM_PARALLEL_FILTER),
+  
   localparam integer ROW_NUM1 = (NUM_PE == 1) ? (FM_SIZE + (NUM_PE-1))/NUM_PE:(FM_SIZE + (NUM_PE-1))/NUM_PE + (KERNEL_SIZE-STRIDE),                //Número de linhas a processar por cada PE (exclusão do último)
   localparam integer ROW_NUM2 = (NUM_PE ==1 ) ? ROW_NUM1:(STRIDE < KERNEL_SIZE) ? 
                                (((KERNEL_SIZE%2 == 0 && ROW_NUM1%2 == 0) ||  (KERNEL_SIZE%2 != 0 && ROW_NUM1%2 != 0) ) ? ROW_NUM1: ROW_NUM1 + 1) 
@@ -93,7 +99,7 @@ module layer_blk_tb #(
   wire [$clog2(OUT_SIZE**2):0] w_output_bram_r_addr;
 //  wire signed [(48*PE_TO_USE*OUT_FM_CH*IN_FM_CH)-1:0] output_bram_o_data;
   
-  wire signed [(48*PE_TO_USE*OUT_FM_CH)-1:0] output_bram_o_data;
+  wire signed [(48*PE_TO_USE*NUM_PARALLEL_FILTER)-1:0] output_bram_o_data;
   wire  [NUM_ITERATIONS-1:0] output_bram_w_en;
   wire  [NUM_ITERATIONS-1:0] output_last_bram_w_en;  
   wire o_done;
@@ -104,6 +110,11 @@ module layer_blk_tb #(
   
   
   reg r_done;
+  
+  reg r_ready_read;
+  wire w_load_fm;
+  
+  integer num_it;
   
   always #5 i_clk = ~i_clk;
 
@@ -120,6 +131,8 @@ module layer_blk_tb #(
     
     i_clk = 0;
     i_rst = 1;
+    r_ready_read = 0;
+    
     r_done = 0;
 
     weight_bram_i_data = 0;
@@ -135,15 +148,26 @@ module layer_blk_tb #(
 
 
     output_bram_r_addr = 0;
-
+    
     
     out_file=0;
+    num_it=0;
     
     #150
     i_rst = 0;
 
-
   end
+  
+  
+  always @(posedge i_clk) begin
+    if(o_done) begin
+        r_ready_read <= 1;
+    end
+    else begin
+        r_ready_read <= 0;
+    end
+  end
+  
   
   /***************************************************
   Escrita do filtro e fmp nas brams
@@ -192,65 +216,71 @@ module layer_blk_tb #(
     Escrita dos ficheiros os valores dos output values
   ***************************************************/
     always @(posedge i_clk) begin
-        if(o_done || r_done) begin
-            r_done <= 1;
-            if(out_file < PE_TO_USE - 1 || out_file == 0) begin
+//        if(o_done || r_done) begin
+//            r_done <= 1;
+//            if(out_file < PE_TO_USE - 1 || out_file == 0) begin
             
-                if(((output_bram_r_addr < (BRAM_SIZE*OUT_SIZE)+1) && out_file == 0) || (((output_bram_r_addr < (MID_BRAM_SIZE*OUT_SIZE)+1) && out_file > 0)) ) begin
-                   if(output_bram_r_addr > 0) begin
-                        $fwrite(out_data,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*0 +: 48]);    // 0..47, 48..95
-                        $fwrite(out_data1,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*1 +: 48]);   //96..143,144..191
-                        $fwrite(out_data2,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*2 +: 48]);   //192..240,241..288
-                        $fwrite(out_data3,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*3 +: 48]);    // 0..47, 48..95
-                        $fwrite(out_data4,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*4 +: 48]);   //96..143,144..191
-                        $fwrite(out_data5,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*5 +: 48]);   //192..240,241..288
-                   end
+//                if(((output_bram_r_addr < (BRAM_SIZE*OUT_SIZE)+1) && out_file == 0) || (((output_bram_r_addr < (MID_BRAM_SIZE*OUT_SIZE)+1) && out_file > 0)) ) begin
+//                   if(output_bram_r_addr > 0) begin
+//                        $fwrite(out_data,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*0 +: 48]);    // 0..47, 48..95
+//                        $fwrite(out_data1,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*1 +: 48]);   //96..143,144..191
+//                        $fwrite(out_data2,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*2 +: 48]);   //192..240,241..288
+//                        $fwrite(out_data3,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*3 +: 48]);    // 0..47, 48..95
+//                        $fwrite(out_data4,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*4 +: 48]);   //96..143,144..191
+//                        $fwrite(out_data5,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*5 +: 48]);   //192..240,241..288
+//                   end
 
 
-                    output_bram_r_addr <= output_bram_r_addr + 1;
-                end
-                else begin
-                    output_bram_r_addr <= 0;
-                    out_file <= out_file + 1;
-                end
+//                    output_bram_r_addr <= output_bram_r_addr + 1;
+//                end
+//                else begin
+//                    output_bram_r_addr <= 0;
+//                    out_file <= out_file + 1;
+//                end
                 
                 
-            end
-            else if ((out_file == PE_TO_USE - 1) && output_bram_r_addr < (LAST_BRAM_SIZE*OUT_SIZE)+1) begin
-                   if(output_bram_r_addr > 0) begin
-                        $fwrite(out_data,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*0 +: 48]);    // 0..47, 48..95
-                        $fwrite(out_data1,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*1 +: 48]);   //96..143,144..191
-                        $fwrite(out_data2,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*2 +: 48]);   //192..240,241..288
-                        $fwrite(out_data3,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*3 +: 48]);   // 0..47, 48..95
-                        $fwrite(out_data4,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*4 +: 48]);   //96..143,144..191
-                        $fwrite(out_data5,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*5 +: 48]);   //192..240,241..288
-                   end
-                   output_bram_r_addr <= output_bram_r_addr + 1;   
-            end
-            else begin
-                    output_bram_r_addr <= 0;
-                    out_file <= out_file + 1;
-            end
+//            end
+//            else if ((out_file == PE_TO_USE - 1) && output_bram_r_addr < (LAST_BRAM_SIZE*OUT_SIZE)+1) begin
+//                   if(output_bram_r_addr > 0) begin
+//                        $fwrite(out_data,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*0 +: 48]);    // 0..47, 48..95
+//                        $fwrite(out_data1,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*1 +: 48]);   //96..143,144..191
+//                        $fwrite(out_data2,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*2 +: 48]);   //192..240,241..288
+//                        $fwrite(out_data3,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*3 +: 48]);   // 0..47, 48..95
+//                        $fwrite(out_data4,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*4 +: 48]);   //96..143,144..191
+//                        $fwrite(out_data5,"%0d\n", output_bram_o_data[out_file*48 + 48*PE_TO_USE*5 +: 48]);   //192..240,241..288
+//                   end
+//                   output_bram_r_addr <= output_bram_r_addr + 1;   
+//            end
+//            else begin
+//                    output_bram_r_addr <= 0;
+//                    out_file <= out_file + 1;
+//            end
             
-        end
+//        end
         
-        if(out_file == PE_TO_USE)
-            $finish;
+//        if(out_file == PE_TO_USE)
+            if(o_done) begin
+                num_it = num_it + 1;
+                if(num_it == NUM_ITERATIONS*2)
+                $finish;
+            end
         
     end
     
     layer_blk #(
-        .KERNEL_SIZE(KERNEL_SIZE),
-        .FM_SIZE(FM_SIZE),
-        .PADDING(PADDING),
-        .STRIDE(STRIDE),
-        .MAXPOOL(MAXPOOL),
-        .IN_FM_CH(IN_FM_CH),
-        .OUT_FM_CH(OUT_FM_CH),
-        .DSP_AVAILABLE(DSP_AVAILABLE)
+        .kernel_size(KERNEL_SIZE),
+        .fm_size(FM_SIZE),
+        .padding(PADDING),
+        .stride(STRIDE),
+        .maxpool(MAXPOOL),
+        .in_fm_ch(IN_FM_CH),
+        .out_fm_ch(OUT_FM_CH),
+        .dsp_available(DSP_AVAILABLE),
+        .bram_available(BRAM_AVAILABLE)
     ) TOP_layer (
         .i_clk(i_clk), 
         .i_rst(i_rst), 
+        .i_ready_read(r_ready_read),
         .i_weight_data(weight_bram_o_data),
         .i_fm_data(fm_bram_o_data),
         .i_outfm_data(output_bram_o_data),
@@ -262,7 +292,8 @@ module layer_blk_tb #(
         .o_output_bram_r_addr(w_output_bram_r_addr),
         .o_output_last_bram_w_en(output_last_bram_w_en),
         .o_weight_bram_r_addr(weight_bram_r_addr),
-        .o_done(o_done)
+        .o_done(o_done),
+        .o_load_fm(w_load_fm)
     );
 
     
@@ -351,7 +382,7 @@ module layer_blk_tb #(
     generate 
     genvar out_BRAM, out_FM;
     
-    for(out_FM = 0; out_FM < OUT_FM_CH; out_FM = out_FM + 1) begin
+    for(out_FM = 0; out_FM < NUM_PARALLEL_FILTER; out_FM = out_FM + 1) begin
         for(out_BRAM = 0; out_BRAM < PE_TO_USE; out_BRAM = out_BRAM +1) begin      
             if(out_BRAM < PE_TO_USE - 1 || out_BRAM == 0) begin
                  bram #(
